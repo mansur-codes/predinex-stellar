@@ -157,15 +157,19 @@ fn p1_payout_formula_holds_for_uneven_distributions() {
         mint_fuzz(&t.env, &t.token, &loser, total_a.max(total_b) + 1);
 
         if winning_outcome == 0 {
-            t.client.place_bet(&winner, &pool_id, &0u32, &total_a, &None::<Address>);
+            t.client
+                .place_bet(&winner, &pool_id, &0u32, &total_a, &None::<Address>);
             if total_b > 0 {
-                t.client.place_bet(&loser, &pool_id, &1u32, &total_b, &None::<Address>);
+                t.client
+                    .place_bet(&loser, &pool_id, &1u32, &total_b, &None::<Address>);
             }
         } else {
             if total_a > 0 {
-                t.client.place_bet(&loser, &pool_id, &0u32, &total_a, &None::<Address>);
+                t.client
+                    .place_bet(&loser, &pool_id, &0u32, &total_a, &None::<Address>);
             }
-            t.client.place_bet(&winner, &pool_id, &1u32, &total_b, &None::<Address>);
+            t.client
+                .place_bet(&winner, &pool_id, &1u32, &total_b, &None::<Address>);
         }
 
         expire_fuzz(&t.env);
@@ -215,8 +219,10 @@ fn p2_fee_accounting_correct_for_diverse_pool_sizes() {
         mint_fuzz(&t.env, &t.token, &winner, total_a + 1);
         mint_fuzz(&t.env, &t.token, &loser, total_b + 1);
 
-        t.client.place_bet(&winner, &pool_id, &0u32, &total_a, &None::<Address>);
-        t.client.place_bet(&loser, &pool_id, &1u32, &total_b, &None::<Address>);
+        t.client
+            .place_bet(&winner, &pool_id, &0u32, &total_a, &None::<Address>);
+        t.client
+            .place_bet(&loser, &pool_id, &1u32, &total_b, &None::<Address>);
 
         expire_fuzz(&t.env);
         t.client.settle_pool(&creator, &pool_id, &0u32);
@@ -263,11 +269,15 @@ fn p3_deterministic_fuzz_single_winner_distributions() {
         mint_fuzz(&t.env, &t.token, &loser, total_a.max(total_b) + 1);
 
         if winning_outcome == 0 {
-            t.client.place_bet(&winner, &pool_id, &0u32, &total_a, &None::<Address>);
-            t.client.place_bet(&loser, &pool_id, &1u32, &total_b, &None::<Address>);
+            t.client
+                .place_bet(&winner, &pool_id, &0u32, &total_a, &None::<Address>);
+            t.client
+                .place_bet(&loser, &pool_id, &1u32, &total_b, &None::<Address>);
         } else {
-            t.client.place_bet(&loser, &pool_id, &0u32, &total_a, &None::<Address>);
-            t.client.place_bet(&winner, &pool_id, &1u32, &total_b, &None::<Address>);
+            t.client
+                .place_bet(&loser, &pool_id, &0u32, &total_a, &None::<Address>);
+            t.client
+                .place_bet(&winner, &pool_id, &1u32, &total_b, &None::<Address>);
         }
 
         expire_fuzz(&t.env);
@@ -341,11 +351,13 @@ fn p4_deterministic_fuzz_multi_winner_distributions() {
 
         for (w, &bet) in winners.iter().zip(winner_bets.iter()) {
             mint_fuzz(&t.env, &t.token, w, bet);
-            t.client.place_bet(w, &pool_id, &0u32, &bet, &None::<Address>);
+            t.client
+                .place_bet(w, &pool_id, &0u32, &bet, &None::<Address>);
         }
         for (l, &bet) in losers.iter().zip(loser_bets.iter()) {
             mint_fuzz(&t.env, &t.token, l, bet);
-            t.client.place_bet(l, &pool_id, &1u32, &bet, &None::<Address>);
+            t.client
+                .place_bet(l, &pool_id, &1u32, &bet, &None::<Address>);
         }
 
         expire_fuzz(&t.env);
@@ -415,11 +427,16 @@ fn p5_seeded_edge_case_distribution_reproduces_expected_math() {
     mint_fuzz(&t.env, &t.token, &loser1, 400);
     mint_fuzz(&t.env, &t.token, &loser2, 600);
 
-    t.client.place_bet(&winner1, &pool_id, &0u32, &100i128, &None::<Address>);
-    t.client.place_bet(&winner2, &pool_id, &0u32, &200i128, &None::<Address>);
-    t.client.place_bet(&winner3, &pool_id, &0u32, &700i128, &None::<Address>);
-    t.client.place_bet(&loser1, &pool_id, &1u32, &400i128, &None::<Address>);
-    t.client.place_bet(&loser2, &pool_id, &1u32, &600i128, &None::<Address>);
+    t.client
+        .place_bet(&winner1, &pool_id, &0u32, &100i128, &None::<Address>);
+    t.client
+        .place_bet(&winner2, &pool_id, &0u32, &200i128, &None::<Address>);
+    t.client
+        .place_bet(&winner3, &pool_id, &0u32, &700i128, &None::<Address>);
+    t.client
+        .place_bet(&loser1, &pool_id, &1u32, &400i128, &None::<Address>);
+    t.client
+        .place_bet(&loser2, &pool_id, &1u32, &600i128, &None::<Address>);
 
     expire_fuzz(&t.env);
     t.client.settle_pool(&creator, &pool_id, &0u32);
@@ -453,8 +470,10 @@ fn p6_payout_invariant_holds_with_minimal_losing_side() {
     mint_fuzz(&t.env, &t.token, &winner, total_a);
     mint_fuzz(&t.env, &t.token, &loser, total_b);
 
-    t.client.place_bet(&winner, &pool_id, &0u32, &total_a, &None::<Address>);
-    t.client.place_bet(&loser, &pool_id, &1u32, &total_b, &None::<Address>);
+    t.client
+        .place_bet(&winner, &pool_id, &0u32, &total_a, &None::<Address>);
+    t.client
+        .place_bet(&loser, &pool_id, &1u32, &total_b, &None::<Address>);
 
     expire_fuzz(&t.env);
     t.client.settle_pool(&creator, &pool_id, &0u32);
@@ -489,8 +508,10 @@ fn p7_payout_invariant_holds_with_minimal_winning_side() {
     mint_fuzz(&t.env, &t.token, &winner, total_a);
     mint_fuzz(&t.env, &t.token, &loser, total_b);
 
-    t.client.place_bet(&winner, &pool_id, &0u32, &total_a, &None::<Address>);
-    t.client.place_bet(&loser, &pool_id, &1u32, &total_b, &None::<Address>);
+    t.client
+        .place_bet(&winner, &pool_id, &0u32, &total_a, &None::<Address>);
+    t.client
+        .place_bet(&loser, &pool_id, &1u32, &total_b, &None::<Address>);
 
     expire_fuzz(&t.env);
     t.client.settle_pool(&creator, &pool_id, &0u32);
@@ -525,8 +546,10 @@ fn p8_zero_fee_winner_receives_entire_pool() {
     mint_fuzz(&t.env, &t.token, &winner, 500);
     mint_fuzz(&t.env, &t.token, &loser, 500);
 
-    t.client.place_bet(&winner, &pool_id, &0u32, &500i128, &None::<Address>);
-    t.client.place_bet(&loser, &pool_id, &1u32, &500i128, &None::<Address>);
+    t.client
+        .place_bet(&winner, &pool_id, &0u32, &500i128, &None::<Address>);
+    t.client
+        .place_bet(&loser, &pool_id, &1u32, &500i128, &None::<Address>);
 
     expire_fuzz(&t.env);
     t.client.settle_pool(&creator, &pool_id, &0u32);
@@ -559,8 +582,10 @@ fn p9_max_fee_payout_formula_holds() {
     mint_fuzz(&t.env, &t.token, &winner, 600);
     mint_fuzz(&t.env, &t.token, &loser, 400);
 
-    t.client.place_bet(&winner, &pool_id, &0u32, &600i128, &None::<Address>);
-    t.client.place_bet(&loser, &pool_id, &1u32, &400i128, &None::<Address>);
+    t.client
+        .place_bet(&winner, &pool_id, &0u32, &600i128, &None::<Address>);
+    t.client
+        .place_bet(&loser, &pool_id, &1u32, &400i128, &None::<Address>);
 
     expire_fuzz(&t.env);
     t.client.settle_pool(&creator, &pool_id, &0u32);
@@ -614,11 +639,13 @@ fn p10_conservation_invariant_holds_for_random_distribution() {
 
         for (w, &bet) in winners.iter().zip(winner_bets.iter()) {
             mint_fuzz(&t.env, &t.token, w, bet);
-            t.client.place_bet(w, &pool_id, &0u32, &bet, &None::<Address>);
+            t.client
+                .place_bet(w, &pool_id, &0u32, &bet, &None::<Address>);
         }
         for (l, &bet) in losers.iter().zip(loser_bets.iter()) {
             mint_fuzz(&t.env, &t.token, l, bet);
-            t.client.place_bet(l, &pool_id, &1u32, &bet, &None::<Address>);
+            t.client
+                .place_bet(l, &pool_id, &1u32, &bet, &None::<Address>);
         }
 
         expire_fuzz(&t.env);

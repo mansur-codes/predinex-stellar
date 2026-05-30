@@ -255,3 +255,35 @@ export function validatePoolCreationForm(data: {
     errors,
   };
 }
+
+type PoolCreationField = 'title' | 'description' | 'outcomeA' | 'outcomeB' | 'duration';
+
+export function validateField(field: PoolCreationField | string, value: string): string | undefined {
+  const result =
+    field === 'title'
+      ? validatePoolTitle(value)
+      : field === 'description'
+        ? validatePoolDescription(value)
+        : field === 'outcomeA' || field === 'outcomeB'
+          ? validateOutcome(value)
+          : field === 'duration'
+            ? validateDuration(Number.parseInt(value, 10))
+            : { valid: true };
+
+  return result.valid ? undefined : result.error;
+}
+
+export function getCharLimit(field: PoolCreationField | string): number | undefined {
+  if (field === 'title') return MAX_TITLE_LENGTH;
+  if (field === 'description') return MAX_DESCRIPTION_LENGTH;
+  if (field === 'outcomeA' || field === 'outcomeB') return MAX_OUTCOME_LENGTH;
+  return undefined;
+}
+
+export function getHelpText(field: PoolCreationField | string): string {
+  if (field === 'title') return 'Ask a clear, objective market question.';
+  if (field === 'description') return 'Include context and resolution criteria.';
+  if (field === 'outcomeA' || field === 'outcomeB') return 'Use a short outcome label.';
+  if (field === 'duration') return 'Duration is measured in seconds.';
+  return '';
+}

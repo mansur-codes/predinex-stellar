@@ -69,7 +69,8 @@ impl TestCtx {
     fn fund_and_bet(&self, user: &Address, pool_id: u32, outcome: u32, amount: i128) {
         let token_admin_client = token::StellarAssetClient::new(&self.env, &self.token_id);
         token_admin_client.mint(user, &amount);
-        self.client.place_bet(user, &pool_id, &outcome, &amount, &None::<Address>);
+        self.client
+            .place_bet(user, &pool_id, &outcome, &amount, &None::<Address>);
     }
 
     /// Advance ledger past the pool's deadline and settle it using pool_creator.
@@ -134,7 +135,8 @@ fn test_place_bet_on_frozen_pool_blocked() {
     let user = Address::generate(&ctx.env);
     let token_admin_client = token::StellarAssetClient::new(&ctx.env, &ctx.token_id);
     token_admin_client.mint(&user, &500);
-    ctx.client.place_bet(&user, &pool_id, &0, &100, &None::<Address>);
+    ctx.client
+        .place_bet(&user, &pool_id, &0, &100, &None::<Address>);
 }
 
 #[test]
@@ -147,7 +149,8 @@ fn test_place_bet_resumes_after_unfreeze() {
     let user = Address::generate(&ctx.env);
     let token_admin_client = token::StellarAssetClient::new(&ctx.env, &ctx.token_id);
     token_admin_client.mint(&user, &500);
-    ctx.client.place_bet(&user, &pool_id, &0, &100, &None::<Address>);
+    ctx.client
+        .place_bet(&user, &pool_id, &0, &100, &None::<Address>);
     let pool = ctx.client.get_pool(&pool_id).unwrap();
     assert_eq!(pool.total_a, 100);
 }

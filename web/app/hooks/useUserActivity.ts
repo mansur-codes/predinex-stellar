@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { predinexReadApi } from '../lib/adapters/predinex-read-api';
 import type { ActivityItem } from '../lib/adapters/types';
 import { userActivityCache } from '../lib/cache-invalidation';
@@ -29,17 +29,35 @@ export function useUserActivity(
     const [activities, setActivities] = useState<ActivityItem[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const requestIdRef = useRef(0);
+    const mountedRef = useRef(true);
+    const lastParamsRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            requestIdRef.current += 1;
+        };
+    }, []);
 
     const fetchActivity = useCallback(async () => {
+        const requestId = requestIdRef.current + 1;
+        requestIdRef.current = requestId;
+
         if (!address) {
-            setActivities([]);
+            if (mountedRef.current) {
+                setActivities([]);
+            }
             return;
         }
 
         // Return in-memory cached result if still fresh
         const cached = userActivityCache.get<ActivityItem[]>(address);
         if (cached) {
-            setActivities(cached);
+            if (mountedRef.current && requestIdRef.current === requestId) {
+                setActivities(cached);
+            }
             return;
         }
 
@@ -48,15 +66,35 @@ export function useUserActivity(
 
         try {
             const data = await predinexReadApi.getUserActivitySoroban(address, limit);
+            if (!mountedRef.current || requestIdRef.current !== requestId) {
+                return;
+            }
             setActivities(data);
             userActivityCache.set(address, data, REFRESH_INTERVAL_MS);
         } catch (e) {
+            if (!mountedRef.current || requestIdRef.current !== requestId) {
+                return;
+            }
             setError('Failed to load activity. Please try again.');
             console.error('useUserActivity error:', e);
         } finally {
-            setIsLoading(false);
+            if (mountedRef.current && requestIdRef.current === requestId) {
+                setIsLoading(false);
+            }
         }
     }, [address, limit]);
+
+    useEffect(() => {
+        const key = `${address ?? ''}:${limit}`;
+        if (lastParamsRef.current === null) {
+            lastParamsRef.current = key;
+            return;
+        }
+        if (lastParamsRef.current !== key) {
+            lastParamsRef.current = key;
+            void fetchActivity();
+        }
+    }, [address, fetchActivity, limit]);
 
     useVisibilityAwarePolling(fetchActivity, REFRESH_INTERVAL_MS, {
         enabled: !!address,

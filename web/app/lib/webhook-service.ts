@@ -91,7 +91,7 @@ export function getWebhookConfig(poolId?: number): WebhookConfig | null {
  * Generate HMAC-SHA256 signature for webhook payload.
  * Used in the `X-Predinex-Signature` header.
  */
-function generateSignature(payload: string, secret: string): string {
+function generateSignature(payload: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secret);
   const messageData = encoder.encode(payload);

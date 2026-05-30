@@ -66,7 +66,7 @@ export function useLeaderboard(currentUserAddress?: string | null): UseLeaderboa
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Add current user to leaderboard if specified
-      let entriesWithUser = [...mockLeaderboardData];
+      const entriesWithUser = [...mockLeaderboardData];
       
       if (currentUserAddress) {
         // Check if user already exists in mock data

@@ -86,8 +86,10 @@ fn m1_pool_totals_accumulate_across_many_users() {
 
     for user in &users {
         mint(&t.env, &t.token, user, bet_a + bet_b);
-        t.client.place_bet(user, &pool_id, &0u32, &bet_a, &None::<Address>);
-        t.client.place_bet(user, &pool_id, &1u32, &bet_b, &None::<Address>);
+        t.client
+            .place_bet(user, &pool_id, &0u32, &bet_a, &None::<Address>);
+        t.client
+            .place_bet(user, &pool_id, &1u32, &bet_b, &None::<Address>);
     }
 
     let pool = t.client.get_pool(&pool_id).expect("pool must exist");
@@ -124,7 +126,8 @@ fn m2_per_user_totals_stay_correct_after_repeated_bets() {
     let mut expected_b = 0i128;
 
     for &(outcome, amount) in bets {
-        t.client.place_bet(&user, &pool_id, &outcome, &amount, &None::<Address>);
+        t.client
+            .place_bet(&user, &pool_id, &outcome, &amount, &None::<Address>);
         if outcome == 0 {
             expected_a += amount;
         } else {
@@ -169,12 +172,18 @@ fn m3_participant_count_increments_once_per_user() {
     }
 
     // Each user places two bets
-    t.client.place_bet(&user1, &pool_id, &0u32, &100i128, &None::<Address>);
-    t.client.place_bet(&user1, &pool_id, &1u32, &100i128, &None::<Address>);
-    t.client.place_bet(&user2, &pool_id, &0u32, &200i128, &None::<Address>);
-    t.client.place_bet(&user2, &pool_id, &1u32, &200i128, &None::<Address>);
-    t.client.place_bet(&user3, &pool_id, &0u32, &300i128, &None::<Address>);
-    t.client.place_bet(&user3, &pool_id, &1u32, &300i128, &None::<Address>);
+    t.client
+        .place_bet(&user1, &pool_id, &0u32, &100i128, &None::<Address>);
+    t.client
+        .place_bet(&user1, &pool_id, &1u32, &100i128, &None::<Address>);
+    t.client
+        .place_bet(&user2, &pool_id, &0u32, &200i128, &None::<Address>);
+    t.client
+        .place_bet(&user2, &pool_id, &1u32, &200i128, &None::<Address>);
+    t.client
+        .place_bet(&user3, &pool_id, &0u32, &300i128, &None::<Address>);
+    t.client
+        .place_bet(&user3, &pool_id, &1u32, &300i128, &None::<Address>);
 
     let pool = t.client.get_pool(&pool_id).expect("pool must exist");
     assert_eq!(
@@ -202,11 +211,13 @@ fn m4_settlement_and_claims_correct_after_accumulation() {
 
     for w in &winners {
         mint(&t.env, &t.token, w, winner_bet);
-        t.client.place_bet(w, &pool_id, &0u32, &winner_bet, &None::<Address>);
+        t.client
+            .place_bet(w, &pool_id, &0u32, &winner_bet, &None::<Address>);
     }
     for l in &losers {
         mint(&t.env, &t.token, l, loser_bet);
-        t.client.place_bet(l, &pool_id, &1u32, &loser_bet, &None::<Address>);
+        t.client
+            .place_bet(l, &pool_id, &1u32, &loser_bet, &None::<Address>);
     }
 
     // total_a = 4 * 250 = 1000, total_b = 2 * 500 = 1000, total = 2000
@@ -269,7 +280,8 @@ fn m5_pool_totals_correct_with_many_small_repeated_bets() {
     for user in &users {
         mint(&t.env, &t.token, user, bet_amount * bets_per_user as i128);
         for _ in 0..bets_per_user {
-            t.client.place_bet(user, &pool_id, &0u32, &bet_amount, &None::<Address>);
+            t.client
+                .place_bet(user, &pool_id, &0u32, &bet_amount, &None::<Address>);
         }
     }
 
@@ -305,10 +317,14 @@ fn m6_asymmetric_accumulation_payouts_are_proportional() {
     mint(&t.env, &t.token, &winner3, 600);
     mint(&t.env, &t.token, &loser, 400);
 
-    t.client.place_bet(&winner1, &pool_id, &0u32, &100i128, &None::<Address>);
-    t.client.place_bet(&winner2, &pool_id, &0u32, &300i128, &None::<Address>);
-    t.client.place_bet(&winner3, &pool_id, &0u32, &600i128, &None::<Address>);
-    t.client.place_bet(&loser, &pool_id, &1u32, &400i128, &None::<Address>);
+    t.client
+        .place_bet(&winner1, &pool_id, &0u32, &100i128, &None::<Address>);
+    t.client
+        .place_bet(&winner2, &pool_id, &0u32, &300i128, &None::<Address>);
+    t.client
+        .place_bet(&winner3, &pool_id, &0u32, &600i128, &None::<Address>);
+    t.client
+        .place_bet(&loser, &pool_id, &1u32, &400i128, &None::<Address>);
 
     // total_a = 1000, total_b = 400, total = 1400
     let total_pool = 1400i128;
@@ -367,10 +383,12 @@ fn m7_treasury_equals_fee_after_all_claims() {
 
     for w in &winners {
         mint(&t.env, &t.token, w, winner_bet);
-        t.client.place_bet(w, &pool_id, &0u32, &winner_bet, &None::<Address>);
+        t.client
+            .place_bet(w, &pool_id, &0u32, &winner_bet, &None::<Address>);
     }
     mint(&t.env, &t.token, &loser, loser_bet);
-    t.client.place_bet(&loser, &pool_id, &1u32, &loser_bet, &None::<Address>);
+    t.client
+        .place_bet(&loser, &pool_id, &1u32, &loser_bet, &None::<Address>);
 
     // total = 3*200 + 300 = 900
     let total_pool = 900i128;
@@ -416,9 +434,11 @@ fn m8_multiple_pools_accumulate_independently() {
     mint(&t.env, &t.token, &user2, 1_000);
 
     // user1 bets only in pool_a
-    t.client.place_bet(&user1, &pool_a, &0u32, &400i128, &None::<Address>);
+    t.client
+        .place_bet(&user1, &pool_a, &0u32, &400i128, &None::<Address>);
     // user2 bets only in pool_b
-    t.client.place_bet(&user2, &pool_b, &1u32, &600i128, &None::<Address>);
+    t.client
+        .place_bet(&user2, &pool_b, &1u32, &600i128, &None::<Address>);
 
     let pa = t.client.get_pool(&pool_a).expect("pool_a must exist");
     let pb = t.client.get_pool(&pool_b).expect("pool_b must exist");
@@ -443,10 +463,13 @@ fn m9_user_betting_both_sides_claims_only_winning_side() {
     mint(&t.env, &t.token, &other, 500);
 
     // User bets on both sides
-    t.client.place_bet(&user, &pool_id, &0u32, &300i128, &None::<Address>); // outcome A
-    t.client.place_bet(&user, &pool_id, &1u32, &200i128, &None::<Address>); // outcome B
-                                                          // Other user bets on B to ensure there is a losing side
-    t.client.place_bet(&other, &pool_id, &1u32, &500i128, &None::<Address>);
+    t.client
+        .place_bet(&user, &pool_id, &0u32, &300i128, &None::<Address>); // outcome A
+    t.client
+        .place_bet(&user, &pool_id, &1u32, &200i128, &None::<Address>); // outcome B
+                                                                        // Other user bets on B to ensure there is a losing side
+    t.client
+        .place_bet(&other, &pool_id, &1u32, &500i128, &None::<Address>);
 
     // total_a = 300, total_b = 700, total = 1000
     let total_pool = 1000i128;
@@ -505,8 +528,13 @@ fn m10_pool_state_verified_after_every_bet_in_sequence() {
     let mut running_b = 0i128;
 
     for &(user_idx, outcome, amount) in sequence {
-        t.client
-            .place_bet(users[user_idx], &pool_id, &outcome, &amount, &None::<Address>);
+        t.client.place_bet(
+            users[user_idx],
+            &pool_id,
+            &outcome,
+            &amount,
+            &None::<Address>,
+        );
         if outcome == 0 {
             running_a += amount;
         } else {
