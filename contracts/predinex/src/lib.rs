@@ -778,6 +778,14 @@ pub struct ReferralBetEvent {
     pub amount: i128,
 }
 
+/// #420 — Event payload emitted when a referrer claims their accumulated rewards.
+#[derive(Clone)]
+#[contracttype]
+pub struct ReferralRewardClaimedEvent {
+    pub referrer: Address,
+    pub amount: i128,
+}
+
 /// #194 — Per-pool result returned by `claim_all_winnings`.
 #[derive(Clone)]
 #[contracttype]
@@ -5197,6 +5205,132 @@ impl PredinexContract {
         env.storage()
             .persistent()
             .get::<_, i128>(&DataKey::TotalContractVolume)
+            .unwrap_or(0)
+    }
+
+    // ── #420 Referral tracking ────────────────────────────────────────────────
+
+    /// Set the referral fee in basis points. 0 disables referrals.
+    /// Only callable by the treasury recipient. Max 1000 bps (10%).
+    pub fn set_referral_bps(env: Env, caller: Address, bps: u32) -> Result<(), ContractError> {
+        caller.require_auth();
+        Self::require_treasury_recipient(&env, &caller)?;
+        if bps > PROTOCOL_FEE_MAX_BPS {
+            return Err(ContractError::FeeOutOfBounds);
+        }
+        env.storage().persistent().set(&DataKey::ReferralBps, &bps);
+        env.events().publish(
+            (Symbol::new(&env, "referral_bps_set"), event_version(&env)),
+            (caller, bps),
+        );
+        Ok(())
+    }
+
+    /// Return the current referral fee in basis points (0 = disabled).
+    pub fn get_referral_bps(env: Env) -> u32 {
+        env.storage()
+            .persistent()
+            .get::<_, u32>(&DataKey::ReferralBps)
+            .unwrap_or(0)
+    }
+
+    /// Place a bet with an optional referrer. When referral_bps > 0 and a
+    /// referrer is provided, `referral_bps` of the bet amount is credited to
+    /// the referrer's claimable balance. Self-referral is rejected.
+    pub fn place_bet_with_referral(
+        env: Env,
+        user: Address,
+        pool_id: u32,
+        outcome: u32,
+        amount: i128,
+        referrer: Address,
+    ) -> Result<(), ContractError> {
+        if user == referrer {
+            return Err(ContractError::SelfReferral);
+        }
+
+        let bps = Self::get_referral_bps(env.clone());
+
+        // Delegate to place_bet (which handles all pool/bet validation).
+        Self::place_bet(env.clone(), user, pool_id, outcome, amount, Some(referrer.clone()))?;
+
+        // Credit referral reward if bps > 0.
+        if bps > 0 {
+            let reward = (amount * bps as i128) / 10_000;
+            if reward > 0 {
+                let key = DataKey::ReferralBalance(referrer.clone());
+                let current: i128 = env.storage().persistent().get(&key).unwrap_or(0);
+                let next = current
+                    .checked_add(reward)
+                    .ok_or(ContractError::TreasuryOverflow)?;
+                env.storage().persistent().set(&key, &next);
+                env.storage().persistent().extend_ttl(
+                    &key,
+                    POOL_BUMP_THRESHOLD,
+                    POOL_BUMP_TARGET,
+                );
+
+                let total: i128 = env
+                    .storage()
+                    .persistent()
+                    .get::<_, i128>(&DataKey::TotalReferralVolume)
+                    .unwrap_or(0)
+                    .checked_add(amount)
+                    .ok_or(ContractError::TreasuryOverflow)?;
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::TotalReferralVolume, &total);
+            }
+        }
+        Ok(())
+    }
+
+    /// Claim all accumulated referral rewards for the caller.
+    /// Transfers the balance from the contract to the referrer and resets it.
+    pub fn claim_referral_rewards(env: Env, referrer: Address) -> Result<i128, ContractError> {
+        referrer.require_auth();
+        let key = DataKey::ReferralBalance(referrer.clone());
+        let balance: i128 = env.storage().persistent().get(&key).unwrap_or(0);
+        if balance == 0 {
+            return Err(ContractError::NoReferralRewards);
+        }
+
+        let token_address = env
+            .storage()
+            .persistent()
+            .get::<_, Address>(&DataKey::Token)
+            .ok_or(ContractError::NotInitialized)?;
+        let token_client = token::Client::new(&env, &token_address);
+        token_client.transfer(&env.current_contract_address(), &referrer, &balance);
+
+        env.storage().persistent().remove(&key);
+
+        env.events().publish(
+            (
+                Symbol::new(&env, "referral_reward_claimed"),
+                event_version(&env),
+            ),
+            ReferralRewardClaimedEvent {
+                referrer,
+                amount: balance,
+            },
+        );
+        Ok(balance)
+    }
+
+    /// Return the pending referral reward balance for `referrer`.
+    pub fn get_referrer_balance(env: Env, referrer: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get::<_, i128>(&DataKey::ReferralBalance(referrer))
+            .unwrap_or(0)
+    }
+
+    /// Return the contract-wide cumulative volume of referred bets.
+    pub fn get_total_referral_volume(env: Env) -> i128 {
+        env.storage()
+            .persistent()
+            .get::<_, i128>(&DataKey::TotalReferralVolume)
             .unwrap_or(0)
     }
 
