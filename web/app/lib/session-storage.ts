@@ -109,16 +109,17 @@ export class SessionStorageService {
    * Validate session structure
    */
   private static isValidSession(session: unknown): session is WalletSession {
+    if (!session || typeof session !== 'object') return false;
+    const s = session as Record<string, unknown>;
     return (
-      session &&
-      typeof (session as any).address === 'string' &&
-      typeof (session as any).publicKey === 'string' &&
-      typeof (session as any).network === 'string' &&
-      typeof (session as any).balance === 'number' &&
-      typeof (session as any).isConnected === 'boolean' &&
-      typeof (session as any).walletType === 'string' &&
-      (session as any).connectedAt &&
-      (session as any).lastActivity
+      typeof s.address === 'string' &&
+      typeof s.publicKey === 'string' &&
+      typeof s.network === 'string' &&
+      typeof s.balance === 'number' &&
+      typeof s.isConnected === 'boolean' &&
+      typeof s.walletType === 'string' &&
+      s.connectedAt != null &&
+      s.lastActivity != null
     );
   }
 

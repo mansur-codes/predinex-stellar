@@ -35,7 +35,7 @@ async function fetchIncentivesFromContract(userAddress: string): Promise<Contrac
     for (const tx of results) {
       if (tx.contract_call?.function_name === 'claim-incentive') {
         const args = tx.contract_call.function_args || [];
-        const poolId = args.find((a: any) => a.name === 'pool-id')?.repr?.replace('u', '') || '0';
+        const poolId = args.find((a: { name: string; repr?: string }) => a.name === 'pool-id')?.repr?.replace('u', '') || '0';
         
         incentives.push({
           poolId: parseInt(poolId),

@@ -178,7 +178,7 @@ export default function BetHistoryTable({
               <label className="block text-sm font-medium mb-2">Outcome</label>
               <select
                 value={filters.historyOutcome}
-                onChange={(e) => onFiltersChange({ historyOutcome: e.target.value as any })}
+                onChange={(e) => onFiltersChange({ historyOutcome: e.target.value as DashboardFilters['historyOutcome'] })}
                 className="w-full px-3 py-2 border border-muted/50 rounded-lg bg-background"
               >
                 <option value="all">All Outcomes</option>
@@ -192,7 +192,7 @@ export default function BetHistoryTable({
               <label className="block text-sm font-medium mb-2">Market Status</label>
               <select
                 value={filters.historyMarketStatus}
-                onChange={(e) => onFiltersChange({ historyMarketStatus: e.target.value as any })}
+                onChange={(e) => onFiltersChange({ historyMarketStatus: e.target.value as DashboardFilters['historyMarketStatus'] })}
                 className="w-full px-3 py-2 border border-muted/50 rounded-lg bg-background"
               >
                 <option value="all">All Markets</option>

@@ -14,7 +14,7 @@ import { FreighterWalletClient } from './freighter-adapter';
 export interface SorobanTxResult {
   status: 'SUCCESS' | 'FAILED';
   txHash: string;
-  returnValue?: any;
+  returnValue?: xdr.ScVal;
   error?: string;
 }
 

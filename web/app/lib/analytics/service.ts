@@ -30,9 +30,9 @@ interface AnalyticsConfig {
  * (e.g., Segment, PostHog, Mixpanel, Google Analytics)
  */
 export interface AnalyticsProvider {
-  track(event: string, properties: Record<string, any>): void;
-  identify?(userId: string, traits?: Record<string, any>): void;
-  page?(name?: string, properties?: Record<string, any>): void;
+  track(event: string, properties: Record<string, unknown>): void;
+  identify?(userId: string, traits?: Record<string, unknown>): void;
+  page?(name?: string, properties?: Record<string, unknown>): void;
 }
 
 /**
@@ -164,29 +164,23 @@ class AnalyticsService {
   /**
    * Sanitize event properties to remove sensitive data
    */
-  private sanitize(properties: any): any {
+  private sanitize(properties: unknown): unknown {
     if (properties === null || properties === undefined) {
       return properties;
     }
-
-    // Redact strings
     if (typeof properties === 'string') {
       return redactSensitiveData(properties);
     }
-
-    // Recursively sanitize objects
     if (typeof properties === 'object') {
       if (Array.isArray(properties)) {
         return properties.map((item) => this.sanitize(item));
       }
-
-      const sanitized: any = {};
-      for (const [key, value] of Object.entries(properties)) {
+      const sanitized: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(properties as Record<string, unknown>)) {
         sanitized[key] = this.sanitize(value);
       }
       return sanitized;
     }
-
     return properties;
   }
 

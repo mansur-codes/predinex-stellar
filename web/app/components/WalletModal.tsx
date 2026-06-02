@@ -48,11 +48,14 @@ export default function WalletModal({ isOpen, onClose, onSelectWallet, error, is
     // Track clicks on unsupported wallets for analytics
     const handleUnsupportedWalletClick = (walletId: string) => {
         // Analytics tracking - can be integrated with your analytics service
-        if (typeof window !== 'undefined' && (window as any).gtag) {
-            (window as any).gtag('event', 'unsupported_wallet_click', {
-                wallet_type: walletId,
-                event_category: 'wallet_connection',
-            });
+    if (typeof window !== 'undefined') {
+            const win = window as Window & { gtag?: (cmd: string, event: string, params: Record<string, string>) => void };
+            if (win.gtag) {
+                win.gtag('event', 'unsupported_wallet_click', {
+                    wallet_type: walletId,
+                    event_category: 'wallet_connection',
+                });
+            }
         }
         console.log(`User attempted to click unsupported wallet: ${walletId}`);
     };
