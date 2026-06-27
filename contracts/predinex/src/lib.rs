@@ -157,6 +157,11 @@ pub enum DataKey {
     MinSettlementParticipants,
     /// #396 — Registered off-chain notification webhooks (Vec<Webhook>).
     Webhooks,
+    /// #632 — Contract-wide admin address. Can be set by the treasury recipient
+    /// via `set_admin`. Used by `require_admin` for privileged operations that
+    /// need a dedicated admin role separate from the treasury recipient and
+    /// freeze admin.
+    Admin,
 }
 
 // #189 — TTL bump policy for persistent storage entries.
@@ -4217,6 +4222,36 @@ impl PredinexContract {
         Ok(())
     }
 
+    /// #632 — Set (or replace) the contract admin address.
+    ///
+    /// The admin role is a dedicated privileged account separate from the
+    /// treasury recipient and freeze admin. Only the treasury recipient may
+    /// assign the admin. The admin address is used by `require_admin` for any
+    /// operation that needs a contract-level admin check.
+    pub fn set_admin(
+        env: Env,
+        caller: Address,
+        admin: Address,
+    ) -> Result<(), ContractError> {
+        caller.require_auth();
+        Self::require_treasury_recipient(&env, &caller)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Admin, &admin);
+
+        env.events().publish(
+            (Symbol::new(&env, "admin_set"), event_version(&env)),
+            admin,
+        );
+        Ok(())
+    }
+
+    /// #632 — Return the current contract admin address, if one has been set.
+    pub fn get_admin(env: Env) -> Option<Address> {
+        env.storage().persistent().get(&DataKey::Admin)
+    }
+
     /// Freeze a pool, blocking new bets and claim payouts.
     /// Callable only by the freeze admin.
     pub fn freeze_pool(env: Env, caller: Address, pool_id: u32) -> Result<(), ContractError> {
@@ -4916,6 +4951,20 @@ impl PredinexContract {
             .get(&DataKey::FreezeAdmin)
             .ok_or(ContractError::FreezeAdminNotSet)?;
         if caller != &freeze_admin {
+            return Err(ContractError::Unauthorized);
+        }
+        Ok(())
+    }
+
+    /// #632 — Check that `caller` is the stored admin address.
+    /// Returns `Unauthorized` if no admin has been set or the caller doesn't match.
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), ContractError> {
+        let admin: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Admin)
+            .ok_or(ContractError::Unauthorized)?;
+        if caller != &admin {
             return Err(ContractError::Unauthorized);
         }
         Ok(())
