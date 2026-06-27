@@ -113,6 +113,8 @@ pub enum DataKey {
     PoolTreasuryCredited(u32),
     /// #191 — contract state schema version stored on-chain for compatibility checks.
     ContractVersion,
+    /// #635 — template that was used to create this pool, if any.
+    PoolTemplateId(u32),
     /// #176 — who triggered settlement for this pool (Creator or Operator).
     PoolSettlementSource(u32),
     /// Maximum allowed total pool size. 0 disables the cap.
@@ -254,7 +256,10 @@ const MAX_DESCRIPTION_LENGTH: u32 = 1_000;
 /// #154 — Maximum length for pool outcome labels in bytes.
 const MAX_OUTCOME_LENGTH: u32 = 50;
 const MIN_OUTCOME_COUNT: u32 = 2;
-const MAX_OUTCOME_COUNT: u32 = 10;
+/// #634 — Hard upper bound on outcomes per pool. Prevents gas exhaustion from
+/// unbounded storage writes and iteration in place_bet / settlement paths.
+/// Raising this requires auditing all loops that iterate over outcomes.
+const MAX_OUTCOME_COUNT: u32 = 20;
 const MAX_METADATA_URI_LENGTH: u32 = 256;
 const MAX_SCHEDULE_POOL_HORIZON_SECS: u64 = 30 * 24 * 60 * 60;
 const SCHEDULED_CLAIM_EXECUTION_CAP: u32 = 10;
@@ -359,6 +364,10 @@ pub enum ContractError {
     NoReferralRewards = 62,
     /// Pool grace period has not expired yet.
     PoolNotExpiredGracePeriod = 63,
+    /// Computed pool deadline is not in the future.
+    DeadlineInPast = 64,
+    /// Creator deposit is below the minimum required at pool creation.
+    InsufficientCreatorDeposit = 65,
 }
 
 /// #176 — Settlement source tag indicating who initiated pool settlement.
@@ -455,6 +464,11 @@ pub struct Pool {
     /// lifetime figure that persists unchanged through settlement and claims —
     /// an on-chain source for analytics displays without an off-chain indexer.
     pub cumulative_volume: i128,
+    /// #635 — The template this pool was created from, if any.
+    /// `Some(template_id)` when the pool was created via
+    /// `create_pool_from_template`; `None` for pools created directly via
+    /// `create_pool` or `create_pool_with_twap_period`.
+    pub template_id: Option<u32>,
 }
 
 #[derive(Clone)]
@@ -1623,7 +1637,11 @@ impl PredinexContract {
 
     fn validate_outcomes(env: &Env, outcomes: &Vec<String>) -> Result<(), ContractError> {
         if outcomes.len() < MIN_OUTCOME_COUNT || outcomes.len() > MAX_OUTCOME_COUNT {
-            return Err(ContractError::InvalidOutcome);
+            return Err(if outcomes.len() > MAX_OUTCOME_COUNT {
+                ContractError::TooManyOutcomes
+            } else {
+                ContractError::InvalidOutcome
+            });
         }
 
         for i in 0..outcomes.len() {
@@ -1837,6 +1855,7 @@ impl PredinexContract {
         created_at: u64,
         status: PoolStatus,
         twap_period_secs: u64,
+        template_id: Option<u32>,
     ) -> Result<u32, ContractError> {
         // Check length bounds before calling validate_non_empty_string, which
         // calls copy_into_slice internally. Attempting to copy an oversized
@@ -1860,6 +1879,12 @@ impl PredinexContract {
             ContractError::DescriptionEmpty,
             ContractError::StringWhitespaceOnly,
         )?;
+
+        // #634 — Fast-fail before validate_outcomes to surface a clear error
+        // (TooManyOutcomes) and avoid allocating/iterating over a huge vec.
+        if outcomes.len() > MAX_OUTCOME_COUNT {
+            return Err(ContractError::TooManyOutcomes);
+        }
 
         Self::validate_outcomes(env, &outcomes)?;
         Self::validate_metadata_uri(&metadata_uri)?;
@@ -1933,6 +1958,7 @@ impl PredinexContract {
             expiry,
             status,
             cumulative_volume: 0,
+            template_id,
         };
 
         let mut totals = Vec::new(env);
@@ -2030,6 +2056,7 @@ impl PredinexContract {
             env.ledger().timestamp(),
             PoolStatus::Open,
             DEFAULT_TWAP_PERIOD_SECS,
+            None,
         )
     }
 
@@ -2059,6 +2086,7 @@ impl PredinexContract {
             env.ledger().timestamp(),
             PoolStatus::Open,
             twap_period_secs,
+            None,
         )
     }
 
@@ -2083,6 +2111,7 @@ impl PredinexContract {
             env.ledger().timestamp(),
             PoolStatus::Open,
             DEFAULT_TWAP_PERIOD_SECS,
+            None,
         )
     }
 
@@ -2108,6 +2137,7 @@ impl PredinexContract {
             env.ledger().timestamp(),
             PoolStatus::Open,
             twap_period_secs,
+            None,
         )
     }
 
@@ -2147,6 +2177,7 @@ impl PredinexContract {
             open_at,
             PoolStatus::Scheduled(open_at),
             DEFAULT_TWAP_PERIOD_SECS,
+            None,
         )?;
         let scheduled = ScheduledPool {
             pool_id,
@@ -2853,6 +2884,18 @@ impl PredinexContract {
     ) -> Result<i128, ContractError> {
         user.require_auth();
         Self::require_not_paused(&env)?;
+
+        // #645 — Multi-asset pools track per-token stakes; the base-token
+        // refund path here is incorrect for alt-token bets.  Callers must use
+        // `cancel_multi_asset_bet` (or the equivalent multi-asset flow) instead.
+        if env
+            .storage()
+            .persistent()
+            .get::<_, bool>(&DataKey::PoolIsMultiAsset(pool_id))
+            .unwrap_or(false)
+        {
+            return Err(ContractError::MultiAssetClaimRequired);
+        }
 
         if amount <= 0 {
             return Err(ContractError::InvalidBetAmount);
@@ -3620,6 +3663,20 @@ impl PredinexContract {
         }
         Self::require_not_paused(&env)?;
 
+        // #646 — Multi-asset pools hold user stakes in various alternative
+        // tokens (PoolTokenDeposit entries), not the base token.  Refunding
+        // via DataKey::Token would drain the wrong balance and leave alt-token
+        // funds permanently locked.  Callers must use the multi-asset refund
+        // path instead.
+        if env
+            .storage()
+            .persistent()
+            .get::<_, bool>(&DataKey::PoolIsMultiAsset(pool_id))
+            .unwrap_or(false)
+        {
+            return Err(ContractError::MultiAssetClaimRequired);
+        }
+
         let mut pool = env
             .storage()
             .persistent()
@@ -4300,6 +4357,9 @@ impl PredinexContract {
 
     /// #195 — Return per-pool protocol fee (fixed at settlement) and cumulative
     /// treasury credits from this pool (fee + payout dust), for analytics and audits.
+    ///
+    /// For multi-asset pools, includes both collected fees (already credited to Treasury)
+    /// and pending fees (awaiting collection via collect_multi_asset_fees).
     pub fn get_pool_protocol_revenue(env: Env, pool_id: u32) -> PoolProtocolRevenue {
         let fee_key = DataKey::PoolSettlementProtocolFee(pool_id);
         let credit_key = DataKey::PoolTreasuryCredited(pool_id);
@@ -4316,7 +4376,35 @@ impl PredinexContract {
             );
         }
         let settlement_protocol_fee: i128 = env.storage().persistent().get(&fee_key).unwrap_or(0);
-        let treasury_credited: i128 = env.storage().persistent().get(&credit_key).unwrap_or(0);
+        let mut treasury_credited: i128 = env.storage().persistent().get(&credit_key).unwrap_or(0);
+
+        // Include pending multi-asset fees (not yet collected).
+        if let Some(allowed) = env
+            .storage()
+            .persistent()
+            .get::<_, Vec<Address>>(&DataKey::PoolAllowedTokens(pool_id))
+        {
+            let mut pending_normalized: i128 = 0;
+            for i in 0..allowed.len() {
+                let tok = allowed.get(i).unwrap();
+                let fee_t: i128 = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::PoolTokenFeePending(pool_id, tok.clone()))
+                    .unwrap_or(0);
+                if fee_t > 0 {
+                    let exchange_rate: i128 = env
+                        .storage()
+                        .persistent()
+                        .get(&DataKey::TokenExchangeRate(tok))
+                        .unwrap_or(10_000);
+                    let normalized_fee = fee_t * exchange_rate / 10_000;
+                    pending_normalized += normalized_fee;
+                }
+            }
+            treasury_credited += pending_normalized;
+        }
+
         PoolProtocolRevenue {
             settlement_protocol_fee,
             treasury_credited,
@@ -4374,6 +4462,12 @@ impl PredinexContract {
         result
     }
 
+    /// Return the current treasury balance (credited fees only).
+    ///
+    /// Note: This returns only fees that have been collected via claim_winnings
+    /// (for single-asset pools) or collect_multi_asset_fees (for multi-asset pools).
+    /// Pending multi-asset fees awaiting collection are not included here, but can
+    /// be viewed per-pool via get_pool_protocol_revenue.
     pub fn get_treasury_balance(env: Env) -> i128 {
         env.storage()
             .persistent()
@@ -4539,6 +4633,58 @@ impl PredinexContract {
         Ok(())
     }
 
+    /// #633 — Rescue stuck or accidentally-sent tokens from the contract.
+    ///
+    /// Transfers `amount` of any `token` held by the contract to the treasury
+    /// recipient. Intended for recovering tokens that were sent to the contract
+    /// address by mistake, or any token other than the primary betting token
+    /// that has accumulated in the contract.
+    ///
+    /// Only the treasury recipient can call this. Every successful rescue emits
+    /// a `tokens_rescued` event so off-chain indexers and monitoring tools can
+    /// detect and audit all rescue operations.
+    ///
+    /// # Arguments
+    /// * `caller` — must be the treasury recipient
+    /// * `token`  — the token contract address to rescue
+    /// * `amount` — number of stroops (raw token units) to transfer; must be > 0
+    pub fn rescue_tokens(
+        env: Env,
+        caller: Address,
+        token: Address,
+        amount: i128,
+    ) -> Result<(), ContractError> {
+        caller.require_auth();
+
+        let treasury_recipient: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TreasuryRecipient)
+            .ok_or(ContractError::NotInitialized)?;
+
+        if caller != treasury_recipient {
+            return Err(ContractError::Unauthorized);
+        }
+
+        if amount <= 0 {
+            return Err(ContractError::InvalidWithdrawalAmount);
+        }
+
+        let token_client = token::Client::new(&env, &token);
+        token_client.transfer(&env.current_contract_address(), &treasury_recipient, &amount);
+
+        env.events().publish(
+            (
+                Symbol::new(&env, "tokens_rescued"),
+                event_version(&env),
+                token,
+                amount,
+            ),
+            caller,
+        );
+        Ok(())
+    }
+
     /// Set (or replace) the freeze admin address. Only callable by the treasury recipient.
     pub fn set_freeze_admin(
         env: Env,
@@ -4566,6 +4712,36 @@ impl PredinexContract {
             freeze_admin,
         );
         Ok(())
+    }
+
+    /// #632 — Set (or replace) the contract admin address.
+    ///
+    /// The admin role is a dedicated privileged account separate from the
+    /// treasury recipient and freeze admin. Only the treasury recipient may
+    /// assign the admin. The admin address is used by `require_admin` for any
+    /// operation that needs a contract-level admin check.
+    pub fn set_admin(
+        env: Env,
+        caller: Address,
+        admin: Address,
+    ) -> Result<(), ContractError> {
+        caller.require_auth();
+        Self::require_treasury_recipient(&env, &caller)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Admin, &admin);
+
+        env.events().publish(
+            (Symbol::new(&env, "admin_set"), event_version(&env)),
+            admin,
+        );
+        Ok(())
+    }
+
+    /// #632 — Return the current contract admin address, if one has been set.
+    pub fn get_admin(env: Env) -> Option<Address> {
+        env.storage().persistent().get(&DataKey::Admin)
     }
 
     /// Freeze a pool, blocking new bets and claim payouts.
@@ -4748,6 +4924,17 @@ impl PredinexContract {
             );
         }
         pool
+    }
+
+    /// #635 — Return the template ID used to create this pool, if any.
+    ///
+    /// Returns `Some(template_id)` when the pool was created via
+    /// `create_pool_from_template`, or `None` for pools created directly.
+    /// This provides an on-chain way for frontends to determine template
+    /// association without off-chain indexing.
+    pub fn get_pool_template_id(env: Env, pool_id: u32) -> Option<u32> {
+        let pool: Option<Pool> = env.storage().persistent().get(&DataKey::Pool(pool_id));
+        pool?.template_id
     }
 
     /// Return the per-pool bet limits (min/max) used by `place_bet`.
@@ -5173,6 +5360,7 @@ impl PredinexContract {
             env.ledger().timestamp(),
             PoolStatus::Open,
             DEFAULT_TWAP_PERIOD_SECS,
+            Some(template_id),
         )?;
         env.events().publish(
             (
@@ -5276,6 +5464,18 @@ impl PredinexContract {
             .get(&DataKey::FreezeAdmin)
             .ok_or(ContractError::FreezeAdminNotSet)?;
         if caller != &freeze_admin {
+            return Err(ContractError::Unauthorized);
+        }
+        Ok(())
+    }
+
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), ContractError> {
+        let admin: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Admin)
+            .ok_or(ContractError::NotInitialized)?;
+        if caller != &admin {
             return Err(ContractError::Unauthorized);
         }
         Ok(())
@@ -5932,7 +6132,7 @@ impl PredinexContract {
             let tok = allowed_tokens.get(i).unwrap();
             for j in 0..seen.len() {
                 if seen.get(j).unwrap() == tok {
-                    return Err(ContractError::DuplicateOutcomeLabels);
+                    return Err(ContractError::DuplicateToken);
                 }
             }
             if !env
@@ -6049,6 +6249,13 @@ impl PredinexContract {
             return Err(ContractError::InvalidBetAmount);
         }
 
+        // Validate referrer is not the user themselves.
+        if let Some(ref ref_addr) = referrer {
+            if ref_addr == &user {
+                return Err(ContractError::SelfReferral);
+            }
+        }
+
         // Pool must be a multi-asset pool.
         if !env
             .storage()
@@ -6108,6 +6315,27 @@ impl PredinexContract {
             .get(&DataKey::PoolTokenMaxBet(pool_id, bet_token.clone()))
             .unwrap_or(0);
         if max_bet > 0 && amount > max_bet {
+            return Err(ContractError::BetAboveMaxBet);
+        }
+
+        // Enforce pool-wide bet limits (admin-configurable via set_pool_bet_limits).
+        // Checked against the normalised amount so the same cap applies uniformly
+        // across all accepted tokens, matching the behaviour of single-asset place_bet.
+        let pool_min_bet: i128 = env
+            .storage()
+            .persistent()
+            .get::<_, i128>(&DataKey::PoolMinBet(pool_id))
+            .unwrap_or(DEFAULT_MIN_BET_STROOPS);
+        let pool_max_bet: i128 = env
+            .storage()
+            .persistent()
+            .get::<_, i128>(&DataKey::PoolMaxBet(pool_id))
+            .unwrap_or(DEFAULT_MAX_BET_STROOPS);
+        if pool_min_bet > 0 && normalized < pool_min_bet {
+            return Err(ContractError::BetBelowMinBet);
+        }
+        // pool_max_bet == 0 => no maximum.
+        if pool_max_bet > 0 && normalized > pool_max_bet {
             return Err(ContractError::BetAboveMaxBet);
         }
 
@@ -6219,6 +6447,17 @@ impl PredinexContract {
             .checked_add(normalized)
             .ok_or(ContractError::PoolTotalOverflow)?;
 
+        // Load user_bet early to check for first-time bet.
+        let mut user_bet: UserBet = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserBet(pool_id, user.clone()))
+            .unwrap_or(UserBet {
+                amount_a: 0,
+                amount_b: 0,
+                total_bet: 0,
+            });
+
         // Update binary-pool fields for backward compat (odds display, TWAP).
         if outcome == 0 {
             pool.total_a = pool
@@ -6231,6 +6470,16 @@ impl PredinexContract {
                 .checked_add(normalized)
                 .ok_or(ContractError::PoolTotalOverflow)?;
         }
+        let mut user_bet: UserBet = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserBet(pool_id, user.clone()))
+            .unwrap_or(UserBet {
+                amount_a: 0,
+                amount_b: 0,
+                total_bet: 0,
+            });
+
         let is_first_bet = user_bet.total_bet == 0;
         if is_first_bet {
             pool.participant_count += 1;
@@ -6258,15 +6507,6 @@ impl PredinexContract {
         );
 
         // Update UserBet and UserOutcomeBets with normalised amount.
-        let mut user_bet: UserBet = env
-            .storage()
-            .persistent()
-            .get(&DataKey::UserBet(pool_id, user.clone()))
-            .unwrap_or(UserBet {
-                amount_a: 0,
-                amount_b: 0,
-                total_bet: 0,
-            });
         if outcome == 0 {
             user_bet.amount_a = user_bet
                 .amount_a
@@ -6584,9 +6824,15 @@ impl PredinexContract {
             }
         }
 
+        let payout_key = DataKey::PoolPayoutState(pool_id);
         env.storage()
             .persistent()
-            .set(&DataKey::PoolPayoutState(pool_id), &payout_state);
+            .set(&payout_key, &payout_state);
+        env.storage().persistent().extend_ttl(
+            &payout_key,
+            POOL_BUMP_THRESHOLD,
+            POOL_BUMP_TARGET,
+        );
 
         // Remove user's bet records to prevent double-claim.
         env.storage()
@@ -6705,20 +6951,71 @@ impl PredinexContract {
             .get(&DataKey::PoolAllowedTokens(pool_id))
             .ok_or(ContractError::PoolNotFound)?;
 
+        // Compute total normalized fee value to credit to Treasury ledger.
+        let mut total_normalized_fee: i128 = 0;
+
         for i in 0..allowed.len() {
             let tok = allowed.get(i).unwrap();
             let fee_key = DataKey::PoolTokenFeePending(pool_id, tok.clone());
             let fee_t: i128 = env.storage().persistent().get(&fee_key).unwrap_or(0);
             if fee_t > 0 {
+                // Transfer the token-denominated fee to the treasury recipient.
                 token::Client::new(&env, &tok).transfer(
                     &env.current_contract_address(),
                     &treasury_recipient,
                     &fee_t,
                 );
+
+                // Convert fee to normalized (base-equivalent) amount for Treasury tracking.
+                let exchange_rate: i128 = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::TokenExchangeRate(tok.clone()))
+                    .unwrap_or(10_000);
+                let normalized_fee = fee_t
+                    .checked_mul(exchange_rate)
+                    .ok_or(ContractError::PoolTotalOverflow)?
+                    / 10_000;
+
+                total_normalized_fee = total_normalized_fee
+                    .checked_add(normalized_fee)
+                    .ok_or(ContractError::TreasuryOverflow)?;
+
+                // Remove the pending fee record.
                 env.storage().persistent().remove(&fee_key);
             }
         }
 
+        // Credit the aggregate Treasury and per-pool attribution ledgers.
+        if total_normalized_fee > 0 {
+            let current_treasury: i128 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Treasury)
+                .unwrap_or(0);
+            let next_treasury = current_treasury
+                .checked_add(total_normalized_fee)
+                .ok_or(ContractError::TreasuryOverflow)?;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Treasury, &next_treasury);
+
+            let credit_key = DataKey::PoolTreasuryCredited(pool_id);
+            let prev_pool_credit: i128 = env.storage().persistent().get(&credit_key).unwrap_or(0);
+            let next_pool_credit = prev_pool_credit
+                .checked_add(total_normalized_fee)
+                .ok_or(ContractError::TreasuryOverflow)?;
+            env.storage()
+                .persistent()
+                .set(&credit_key, &next_pool_credit);
+            env.storage().persistent().extend_ttl(
+                &credit_key,
+                POOL_BUMP_THRESHOLD,
+                POOL_BUMP_TARGET,
+            );
+        }
+
         Ok(())
     }
+
 }
