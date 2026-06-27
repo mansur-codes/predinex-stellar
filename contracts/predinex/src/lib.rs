@@ -5,8 +5,9 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(deprecated)]
 extern crate alloc;
+use alloc::vec;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, token, Address, Env, String, Symbol, Vec,
 };
 
 mod benchmark_tests;
@@ -4637,8 +4638,6 @@ impl PredinexContract {
         Ok(())
     }
 
-    /// #633 — Rescue stuck or accidentally-sent tokens from the contract.
-
     /// Set (or replace) the freeze admin address. Only callable by the treasury recipient.
     pub fn set_freeze_admin(
         env: Env,
@@ -6105,6 +6104,7 @@ impl PredinexContract {
             None,
         )?;
         env.storage()
+            .persistent()
             .set(&DataKey::PoolAllowedTokens(pool_id), &allowed_tokens);
         env.storage().persistent().extend_ttl(
             &DataKey::PoolAllowedTokens(pool_id),

@@ -186,7 +186,7 @@ fn ma_3_place_bet_with_unsupported_token_fails() {
 fn ma_4_place_bet_without_exchange_rate_fails() {
     let t = setup_ma();
     let creator = Address::generate(&t.env);
-    let user = Address::generate(&t.env);
+    let _user = Address::generate(&t.env);
 
     // Set rate for base but NOT for alt before pool creation — pool creation
     // should fail since all tokens need a rate at creation time.
@@ -460,7 +460,7 @@ fn ma_8_collect_fees_updates_treasury_ledger() {
 
     // Read treasury balance before fee collection.
     let treasury_before = t.client.get_treasury_balance();
-    let pool_revenue_before = t.client.get_pool_protocol_revenue(&pool_id);
+    let _pool_revenue_before = t.client.get_pool_protocol_revenue(&pool_id);
 
     // First claim populates PoolTokenFeePending.
     t.client.claim_multi_asset_winnings(&user_a, &pool_id);
