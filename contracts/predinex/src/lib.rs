@@ -358,6 +358,8 @@ pub enum ContractError {
     NoReferralRewards = 62,
     /// Pool grace period has not expired yet.
     PoolNotExpiredGracePeriod = 63,
+    /// Duplicate token addresses found in allowed_tokens list.
+    DuplicateToken = 64,
 }
 
 /// #176 — Settlement source tag indicating who initiated pool settlement.
@@ -5918,7 +5920,7 @@ impl PredinexContract {
             let tok = allowed_tokens.get(i).unwrap();
             for j in 0..seen.len() {
                 if seen.get(j).unwrap() == tok {
-                    return Err(ContractError::DuplicateOutcomeLabels);
+                    return Err(ContractError::DuplicateToken);
                 }
             }
             if !env
@@ -6033,6 +6035,13 @@ impl PredinexContract {
 
         if amount <= 0 {
             return Err(ContractError::InvalidBetAmount);
+        }
+
+        // Validate referrer is not the user themselves.
+        if let Some(ref ref_addr) = referrer {
+            if ref_addr == &user {
+                return Err(ContractError::SelfReferral);
+            }
         }
 
         // Pool must be a multi-asset pool.
@@ -6209,6 +6218,17 @@ impl PredinexContract {
             .checked_add(normalized)
             .ok_or(ContractError::PoolTotalOverflow)?;
 
+        // Load user_bet early to check for first-time bet.
+        let mut user_bet: UserBet = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserBet(pool_id, user.clone()))
+            .unwrap_or(UserBet {
+                amount_a: 0,
+                amount_b: 0,
+                total_bet: 0,
+            });
+
         // Update binary-pool fields for backward compat (odds display, TWAP).
         if outcome == 0 {
             pool.total_a = pool
@@ -6247,16 +6267,19 @@ impl PredinexContract {
             POOL_BUMP_TARGET,
         );
 
-        // Update UserBet and UserOutcomeBets with normalised amount.
-        let mut user_bet: UserBet = env
+        // Track global contract volume (same as place_bet).
+        let total_contract_volume: i128 = env
             .storage()
             .persistent()
-            .get(&DataKey::UserBet(pool_id, user.clone()))
-            .unwrap_or(UserBet {
-                amount_a: 0,
-                amount_b: 0,
-                total_bet: 0,
-            });
+            .get::<_, i128>(&DataKey::TotalContractVolume)
+            .unwrap_or(0)
+            .checked_add(normalized)
+            .ok_or(ContractError::PoolTotalOverflow)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::TotalContractVolume, &total_contract_volume);
+
+        // Update UserBet and UserOutcomeBets with normalised amount.
         if outcome == 0 {
             user_bet.amount_a = user_bet
                 .amount_a
