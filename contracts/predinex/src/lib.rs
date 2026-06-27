@@ -5,9 +5,8 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(deprecated)]
 extern crate alloc;
-use alloc::vec;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, token, Address, Env,
+    contract, contracterror, contractimpl, contracttype, Address, Env,
     String, Symbol, Vec,
 };
 
@@ -6104,7 +6103,9 @@ impl PredinexContract {
             env.ledger().timestamp(),
             PoolStatus::Open,
             DEFAULT_TWAP_PERIOD_SECS,
-            None,        )?;        env.storage()            .persistent()
+            None,
+        )?;
+        env.storage()
             .set(&DataKey::PoolAllowedTokens(pool_id), &allowed_tokens);
         env.storage().persistent().extend_ttl(
             &DataKey::PoolAllowedTokens(pool_id),
@@ -6155,7 +6156,6 @@ impl PredinexContract {
             return Err(ContractError::PoolNotFound);
         }
 
-            None,
         if min_bet > 0 {
             env.storage()
                 .persistent()
