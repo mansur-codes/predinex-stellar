@@ -4671,7 +4671,11 @@ impl PredinexContract {
         }
 
         let token_client = token::Client::new(&env, &token);
-        token_client.transfer(&env.current_contract_address(), &treasury_recipient, &amount);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &treasury_recipient,
+            &amount,
+        );
 
         env.events().publish(
             (
@@ -4720,22 +4724,14 @@ impl PredinexContract {
     /// treasury recipient and freeze admin. Only the treasury recipient may
     /// assign the admin. The admin address is used by `require_admin` for any
     /// operation that needs a contract-level admin check.
-    pub fn set_admin(
-        env: Env,
-        caller: Address,
-        admin: Address,
-    ) -> Result<(), ContractError> {
+    pub fn set_admin(env: Env, caller: Address, admin: Address) -> Result<(), ContractError> {
         caller.require_auth();
         Self::require_treasury_recipient(&env, &caller)?;
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::Admin, &admin);
+        env.storage().persistent().set(&DataKey::Admin, &admin);
 
-        env.events().publish(
-            (Symbol::new(&env, "admin_set"), event_version(&env)),
-            admin,
-        );
+        env.events()
+            .publish((Symbol::new(&env, "admin_set"), event_version(&env)), admin);
         Ok(())
     }
 
@@ -6825,14 +6821,10 @@ impl PredinexContract {
         }
 
         let payout_key = DataKey::PoolPayoutState(pool_id);
+        env.storage().persistent().set(&payout_key, &payout_state);
         env.storage()
             .persistent()
-            .set(&payout_key, &payout_state);
-        env.storage().persistent().extend_ttl(
-            &payout_key,
-            POOL_BUMP_THRESHOLD,
-            POOL_BUMP_TARGET,
-        );
+            .extend_ttl(&payout_key, POOL_BUMP_THRESHOLD, POOL_BUMP_TARGET);
 
         // Remove user's bet records to prevent double-claim.
         env.storage()
@@ -7017,5 +7009,4 @@ impl PredinexContract {
 
         Ok(())
     }
-
 }

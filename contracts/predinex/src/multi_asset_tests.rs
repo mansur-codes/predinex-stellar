@@ -423,21 +423,33 @@ fn ma_8_collect_fees_updates_treasury_ledger() {
     let user_b = Address::generate(&t.env);
 
     // Exchange rates: 1 base = 1 base unit, 1 alt = 0.5 base units.
-    t.client.set_token_exchange_rate(&t.treasury, &t.base_token, &10_000i128);
-    t.client.set_token_exchange_rate(&t.treasury, &t.alt_token, &5_000i128);
+    t.client
+        .set_token_exchange_rate(&t.treasury, &t.base_token, &10_000i128);
+    t.client
+        .set_token_exchange_rate(&t.treasury, &t.alt_token, &5_000i128);
 
     let pool_id = make_ma_pool(&t, &creator);
 
     // user_a bets 500 base tokens (normalized: 500).
     t.base_admin.mint(&user_a, &500i128);
     t.client.place_multi_asset_bet(
-        &user_a, &pool_id, &0u32, &500i128, &t.base_token, &None::<Address>,
+        &user_a,
+        &pool_id,
+        &0u32,
+        &500i128,
+        &t.base_token,
+        &None::<Address>,
     );
 
     // user_b bets 600 alt tokens (normalized: 600 × 0.5 = 300).
     t.alt_admin.mint(&user_b, &600i128);
     t.client.place_multi_asset_bet(
-        &user_b, &pool_id, &1u32, &600i128, &t.alt_token, &None::<Address>,
+        &user_b,
+        &pool_id,
+        &1u32,
+        &600i128,
+        &t.alt_token,
+        &None::<Address>,
     );
 
     // Total normalized = 800, fee 2% = 16.
@@ -456,8 +468,7 @@ fn ma_8_collect_fees_updates_treasury_ledger() {
     // get_pool_protocol_revenue should now show pending fees (even though not yet collected).
     let pool_revenue_pending = t.client.get_pool_protocol_revenue(&pool_id);
     assert_eq!(
-        pool_revenue_pending.treasury_credited,
-        16,
+        pool_revenue_pending.treasury_credited, 16,
         "get_pool_protocol_revenue should include pending fees"
     );
 
@@ -477,15 +488,13 @@ fn ma_8_collect_fees_updates_treasury_ledger() {
 
     // Verify PoolTreasuryCredited was updated and still shows 16 (no double-counting).
     assert_eq!(
-        pool_revenue_after.treasury_credited,
-        16,
+        pool_revenue_after.treasury_credited, 16,
         "PoolTreasuryCredited should track the normalized fee"
     );
 
     // Verify the fee was only credited once (not double-counted).
     assert_eq!(
-        pool_revenue_pending.treasury_credited,
-        pool_revenue_after.treasury_credited,
+        pool_revenue_pending.treasury_credited, pool_revenue_after.treasury_credited,
         "Pending and collected amounts should match (no double-counting)"
     );
 }
