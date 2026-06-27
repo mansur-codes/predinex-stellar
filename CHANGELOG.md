@@ -10,7 +10,9 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### ⛓ Contract
-<!-- Changes to Clarity contracts in contracts/ -->
+- Emit `ClaimWinnings` event on successful claim with topics `(Symbol("claim_winnings"), pool_id, claimant)` and `ClaimEvent` payload containing payout amount, fee amount, winning outcome, and total pool size (#585)
+- Event is gated behind a successful payout — no event emitted when `user_winning_bet == 0` or the call fails
+- Added tests `l5` and `m4` verifying event topics and data match actual payout amounts
 
 ### 🌐 Web
 <!-- Changes to the Next.js frontend in web/ -->
