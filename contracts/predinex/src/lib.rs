@@ -6473,9 +6473,12 @@ impl PredinexContract {
                     .unwrap_or(0);
                 let fee_t = deposit * fee_bps as i128 / 10_000;
                 if fee_t > 0 {
-                    env.storage().persistent().set(
-                        &DataKey::PoolTokenFeePending(pool_id, tok),
-                        &fee_t,
+                    let fee_key = DataKey::PoolTokenFeePending(pool_id, tok);
+                    env.storage().persistent().set(&fee_key, &fee_t);
+                    env.storage().persistent().extend_ttl(
+                        &fee_key,
+                        POOL_BUMP_THRESHOLD,
+                        POOL_BUMP_TARGET,
                     );
                 }
             }
@@ -6575,9 +6578,15 @@ impl PredinexContract {
             }
         }
 
+        let payout_key = DataKey::PoolPayoutState(pool_id);
         env.storage()
             .persistent()
-            .set(&DataKey::PoolPayoutState(pool_id), &payout_state);
+            .set(&payout_key, &payout_state);
+        env.storage().persistent().extend_ttl(
+            &payout_key,
+            POOL_BUMP_THRESHOLD,
+            POOL_BUMP_TARGET,
+        );
 
         // Remove user's bet records to prevent double-claim.
         env.storage()
