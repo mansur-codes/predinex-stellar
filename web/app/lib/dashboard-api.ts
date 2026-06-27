@@ -5,8 +5,8 @@ import { STACKS_MAINNET, STACKS_TESTNET, type StacksNetwork } from "@stacks/netw
 import { UserBet, BetHistory, DashboardData } from "./dashboard-types";
 import { PoolData } from "./market-types";
 import { fetchAllPools, getEnhancedPool } from "./enhanced-stacks-api";
-import { predinexContract } from "./adapters/predinex-contract";
-import { 
+import { getCurrentBlockHeight } from './market-utils';
+import {
   calculatePortfolio, 
   calculatePotentialWinnings, 
   calculateActualWinnings,
@@ -41,7 +41,7 @@ export async function getUserBets(userAddress: string): Promise<UserBet[]> {
         const result = await fetchCallReadOnlyFunction({
           contractAddress: cfg.contract.address,
           contractName: cfg.contract.name,
-          functionName: 'get-user-bet',
+          functionName: 'get_user_bet',
           functionArgs: [uintCV(pool.poolId), principalCV(userAddress)],
           senderAddress: cfg.contract.address,
           network,
@@ -133,7 +133,7 @@ async function createUserBet(
       marketTitle: pool.title,
       outcomeChosen: outcome,
       outcomeName: outcome === 'A' ? pool.outcomeAName : pool.outcomeBName,
-      amountBet: betAmount,
+      amountBet: Number(betAmount),
       betTimestamp: pool.createdAt, // Mock: use pool creation time
       currentOdds,
       potentialWinnings,
@@ -230,29 +230,4 @@ export async function fetchDashboardData(userAddress: string): Promise<Dashboard
 export async function getClaimableWinnings(userAddress: string): Promise<UserBet[]> {
   const userBets = await getUserBets(userAddress);
   return userBets.filter(isClaimEligible);
-}
-
-/**
- * Execute claim transaction for a specific pool
- */
-export async function claimWinnings(poolId: number): Promise<{ success: boolean; txId?: string; error?: string }> {
-  try {
-    const txId = await new Promise<string>((resolve, reject) => {
-      void predinexContract.claimWinnings({
-        poolId,
-        onFinish: (data) => resolve(data.txId),
-        onCancel: () => reject(new Error('Transaction cancelled')),
-      }).catch(reject);
-    });
-
-    return {
-      success: true,
-      txId
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    };
-  }
 }
