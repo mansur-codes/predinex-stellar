@@ -103,6 +103,7 @@ fn v1_test_title_validation() {
             &outcome_a,
             &outcome_b,
             &3600,
+            &MIN_CREATOR_DEPOSIT,
         );
         assert!(
             result.is_ok(),
@@ -120,6 +121,7 @@ fn v1_test_title_validation() {
         &String::from_str(&t.env, "A"),
         &String::from_str(&t.env, "B"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
     assert_eq!(result, Err(Ok(ContractError::TitleTooLong)));
 
@@ -132,6 +134,7 @@ fn v1_test_title_validation() {
         &String::from_str(&t.env, "A"),
         &String::from_str(&t.env, "B"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
     assert_eq!(result, Err(Ok(ContractError::TitleEmpty)));
 
@@ -145,6 +148,7 @@ fn v1_test_title_validation() {
             &String::from_str(&t.env, "A"),
             &String::from_str(&t.env, "B"),
             &3600,
+            &MIN_CREATOR_DEPOSIT,
         );
         assert_eq!(result, Err(Ok(ContractError::StringWhitespaceOnly)));
     }
@@ -171,6 +175,7 @@ fn v2_test_description_validation() {
             &outcome_a,
             &outcome_b,
             &3600,
+            &MIN_CREATOR_DEPOSIT,
         );
         assert!(result.is_ok(), "Valid description should be accepted");
     }
@@ -184,6 +189,7 @@ fn v2_test_description_validation() {
         &String::from_str(&t.env, "A"),
         &String::from_str(&t.env, "B"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
     assert_eq!(result, Err(Ok(ContractError::DescriptionTooLong)));
 
@@ -196,6 +202,7 @@ fn v2_test_description_validation() {
         &String::from_str(&t.env, "A"),
         &String::from_str(&t.env, "B"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
     assert_eq!(result, Err(Ok(ContractError::DescriptionEmpty)));
 
@@ -209,6 +216,7 @@ fn v2_test_description_validation() {
             &String::from_str(&t.env, "A"),
             &String::from_str(&t.env, "B"),
             &3600,
+            &MIN_CREATOR_DEPOSIT,
         );
         assert_eq!(result, Err(Ok(ContractError::StringWhitespaceOnly)));
     }
@@ -388,6 +396,7 @@ fn v5_test_duration_validation() {
         &String::from_str(&t.env, "A"),
         &String::from_str(&t.env, "B"),
         &(MIN_POOL_DURATION_SECS - 1),
+        &MIN_CREATOR_DEPOSIT,
     );
     assert_eq!(result, Err(Ok(ContractError::DurationTooShort)));
 
@@ -399,6 +408,7 @@ fn v5_test_duration_validation() {
         &String::from_str(&t.env, "A"),
         &String::from_str(&t.env, "B"),
         &(MAX_POOL_DURATION_SECS + 1),
+        &MIN_CREATOR_DEPOSIT,
     );
     assert_eq!(result, Err(Ok(ContractError::DurationTooLong)));
 
@@ -410,6 +420,7 @@ fn v5_test_duration_validation() {
         &String::from_str(&t.env, "A"),
         &String::from_str(&t.env, "B"),
         &MIN_POOL_DURATION_SECS,
+        &MIN_CREATOR_DEPOSIT,
     );
     assert!(result.is_ok());
 
@@ -421,6 +432,7 @@ fn v5_test_duration_validation() {
         &String::from_str(&t.env, "A"),
         &String::from_str(&t.env, "B"),
         &MAX_POOL_DURATION_SECS,
+        &MIN_CREATOR_DEPOSIT,
     );
     assert!(result.is_ok());
 
@@ -434,6 +446,7 @@ fn v5_test_duration_validation() {
             &String::from_str(&t.env, "A"),
             &String::from_str(&t.env, "B"),
             &duration,
+            &MIN_CREATOR_DEPOSIT,
         );
         assert!(result.is_ok(), "Duration {} should be accepted", duration);
     }

@@ -20,6 +20,7 @@ fn test_create_pool() {
 
     let contract_id = env.register(PredinexContract, ());
     let client = PredinexContractClient::new(&env, &contract_id);
+    client.initialize(&Address::generate(&env), &Address::generate(&env));
 
     let creator = Address::generate(&env);
     let title = String::from_str(&env, "Market 1");
@@ -35,6 +36,7 @@ fn test_create_pool() {
         &outcome_a,
         &outcome_b,
         &duration,
+        &MIN_CREATOR_DEPOSIT,
     );
     assert_eq!(pool_id, 1);
 
@@ -59,7 +61,8 @@ fn test_create_pool_rejects_duration_above_maximum() {
         &String::from_str(&env, "Desc"),
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
-        &1_000_001,
+        &31_536_001, // exceeds 1-year MAX_POOL_DURATION_SECS
+        &MIN_CREATOR_DEPOSIT,
     );
 }
 
@@ -70,6 +73,7 @@ fn test_create_pool_accepts_duration_just_below_maximum() {
 
     let contract_id = env.register(PredinexContract, ());
     let client = PredinexContractClient::new(&env, &contract_id);
+    client.initialize(&Address::generate(&env), &Address::generate(&env));
 
     env.ledger().with_mut(|li| li.timestamp = 42);
 
@@ -83,6 +87,7 @@ fn test_create_pool_accepts_duration_just_below_maximum() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &duration,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     let pool = client.get_pool(&pool_id).unwrap();
@@ -121,6 +126,7 @@ fn test_large_pool_payouts_with_checked_arithmetic() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user1, &pool_id, &0, &large_amount_a, &None::<Address>);
@@ -170,6 +176,7 @@ fn test_place_bet_rejects_pool_total_overflow() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user1, &pool_id, &0, &huge_amount, &None::<Address>);
@@ -218,6 +225,7 @@ fn test_place_bet() {
         &outcome_a,
         &outcome_b,
         &duration,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user, &pool_id, &0, &100, &None::<Address>);
@@ -333,6 +341,7 @@ fn test_settle_and_claim() {
         &outcome_a,
         &outcome_b,
         &duration,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user1, &pool_id, &0, &100, &None::<Address>);
@@ -387,6 +396,7 @@ fn test_duplicate_claim_rejected() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user, &pool_id, &0, &100, &None::<Address>);
@@ -448,6 +458,7 @@ fn test_initialize_succeeds_once() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     // place_bet internally reads DataKey::Token — this proves initialize stored it
@@ -515,6 +526,7 @@ fn test_initialize_idempotency_preserves_original_token() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     // This would fail if the token address had been overwritten
@@ -559,6 +571,7 @@ fn test_settle_pool_before_expiry_rejected() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user, &pool_id, &0, &100, &None::<Address>);
@@ -594,6 +607,7 @@ fn test_settle_pool_after_expiry_succeeds() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user, &pool_id, &0, &100, &None::<Address>);
@@ -651,6 +665,7 @@ fn test_settle_pool_unauthorized_caller_rejected() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user, &pool_id, &0, &100, &None::<Address>);
@@ -692,6 +707,7 @@ fn test_settle_pool_unauthorized_then_authorized_succeeds() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user, &pool_id, &0, &100, &None::<Address>);
@@ -740,6 +756,7 @@ fn test_get_user_bet_returns_correct_amounts() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600u64,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     // Fund user via the token admin
@@ -792,6 +809,7 @@ fn test_get_user_bet_returns_none_for_user_with_no_bet() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600u64,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     // no_bet_user never called place_bet — must not panic
@@ -854,6 +872,7 @@ fn make_pool(t: &TestEnv) -> u32 {
         &String::from_str(&t.env, "Yes"),
         &String::from_str(&t.env, "No"),
         &3_600u64,
+        &MIN_CREATOR_DEPOSIT,
     )
 }
 
@@ -1247,6 +1266,7 @@ fn e1_get_pools_batch_returns_correct_slice() {
             &String::from_str(&env, "Yes"),
             &String::from_str(&env, "No"),
             &3600u64,
+            &MIN_CREATOR_DEPOSIT,
         );
     }
 
@@ -1288,6 +1308,7 @@ fn e2_get_pools_batch_handles_partial_pages() {
             &String::from_str(&env, "Yes"),
             &String::from_str(&env, "No"),
             &3600u64,
+            &MIN_CREATOR_DEPOSIT,
         );
     }
 
@@ -1320,6 +1341,7 @@ fn e3_get_pools_batch_empty_when_start_exceeds_count() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600u64,
+        &MIN_CREATOR_DEPOSIT,
     );
     client.create_pool(
         &creator,
@@ -1328,6 +1350,7 @@ fn e3_get_pools_batch_empty_when_start_exceeds_count() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600u64,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     // Request starting beyond pool count
@@ -1367,6 +1390,7 @@ fn e4_get_pools_batch_caps_count_at_100() {
             &String::from_str(&env, "Yes"),
             &String::from_str(&env, "No"),
             &3600u64,
+            &MIN_CREATOR_DEPOSIT,
         );
     }
 
@@ -1401,6 +1425,7 @@ fn e5_get_pools_batch_handles_gaps() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600u64,
+        &MIN_CREATOR_DEPOSIT,
     );
     client.create_pool(
         &creator,
@@ -1409,6 +1434,7 @@ fn e5_get_pools_batch_handles_gaps() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600u64,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     let batch = client.get_pools_batch(&1u32, &2u32);
@@ -1605,6 +1631,7 @@ fn g3_after_rotation_only_new_recipient_can_withdraw() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user1, &pool_id, &0, &100, &None::<Address>);
@@ -1743,6 +1770,7 @@ fn h1_successful_withdrawal_emits_event() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user1, &pool_id, &0, &100, &None::<Address>);
@@ -1839,6 +1867,7 @@ fn h4_multiple_withdrawals_emit_separate_events() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user1, &pool_id, &0, &100, &None::<Address>);
@@ -1897,6 +1926,7 @@ fn h5_withdrawal_event_includes_caller_and_recipient() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user1, &pool_id, &0, &100, &None::<Address>);
@@ -1953,6 +1983,7 @@ fn test_settle_pool_event_includes_totals_and_fee() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     // user_a bets 300 on outcome 0, user_b bets 100 on outcome 1
@@ -2012,6 +2043,7 @@ fn test_settle_pool_event_outcome_b_totals() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user_a, &pool_id, &0, &200, &None::<Address>);
@@ -2068,6 +2100,7 @@ fn test_create_pool_with_fee_transfers_correctly() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     // Pool was created successfully
@@ -2111,6 +2144,7 @@ fn test_create_pool_no_fee_succeeds() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     let pool = client.get_pool(&pool_id);
@@ -2192,6 +2226,7 @@ fn test_creation_fee_exemption_skips_fee() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     let pool = client.get_pool(&pool_id);
@@ -2236,6 +2271,7 @@ fn test_creation_fee_exemption_revoked_charges_again() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     assert_eq!(
@@ -2299,6 +2335,7 @@ fn test_cumulative_volume_tracking() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
     let pool_b = client.create_pool(
         &creator,
@@ -2307,6 +2344,7 @@ fn test_cumulative_volume_tracking() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     // New pools start at zero volume.
@@ -2384,6 +2422,7 @@ fn tiered_pool_fee_and_payout(
         &String::from_str(env, "Yes"),
         &String::from_str(env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
     client.place_bet(&winner, &pool_id, &0, &winner_amt, &None::<Address>);
     client.place_bet(&loser, &pool_id, &1, &loser_amt, &None::<Address>);
@@ -2679,6 +2718,7 @@ fn test_settle_below_min_participants_rejected() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
     // Only one participant — below the threshold of 2.
     client.place_bet(&user, &pool_id, &0, &100, &None::<Address>);
@@ -2716,6 +2756,7 @@ fn test_settle_meets_min_participants_succeeds() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
     // Two distinct participants meet the threshold of 2.
     client.place_bet(&alice, &pool_id, &0, &100, &None::<Address>);
@@ -2742,6 +2783,7 @@ fn test_min_settlement_participants_zero_disables_check() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     env.ledger().with_mut(|li| li.timestamp = 3601);
@@ -3160,6 +3202,7 @@ fn j5_get_user_pools_caps_count_at_100() {
             &String::from_str(&env, "Yes"),
             &String::from_str(&env, "No"),
             &3_600u64,
+            &MIN_CREATOR_DEPOSIT,
         );
     }
 
@@ -3327,6 +3370,7 @@ fn l3_loser_claim_leaves_balances_unchanged() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&winner, &pool_id, &0, &300, &None::<Address>);
@@ -3395,6 +3439,7 @@ fn l4_successful_claim_reconciles_treasury_and_balances() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user_a, &pool_id, &0, &300, &None::<Address>);
@@ -3463,6 +3508,7 @@ fn l5_claim_winnings_emits_claim_event() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user_a, &pool_id, &0, &300, &None::<Address>);
@@ -3584,6 +3630,7 @@ fn test_create_pool_exceeds_title_length() {
         &String::from_str(&t.env, "Yes"),
         &String::from_str(&t.env, "No"),
         &3_600u64,
+        &MIN_CREATOR_DEPOSIT,
     );
     assert_eq!(
         result,
@@ -3609,6 +3656,7 @@ fn test_create_pool_exceeds_description_length() {
         &String::from_str(&t.env, "Yes"),
         &String::from_str(&t.env, "No"),
         &3_600u64,
+        &MIN_CREATOR_DEPOSIT,
     );
     assert_eq!(
         result,
@@ -3631,6 +3679,7 @@ fn test_create_pool_exceeds_outcome_length() {
         &long_outcome, // A exceeds
         &String::from_str(&t.env, "No"),
         &3_600u64,
+        &MIN_CREATOR_DEPOSIT,
     );
 }
 
@@ -3650,6 +3699,7 @@ fn test_create_pool_max_lengths_accepted() {
         &String::from_str(&t.env, &out_a_str),
         &String::from_str(&t.env, &out_b_str),
         &3_600u64,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     let pool = t.client.get_pool(&pool_id).unwrap();
@@ -3973,6 +4023,7 @@ fn test_settle_pools_batch_partial_failure() {
         &String::from_str(&t.env, "Yes"),
         &String::from_str(&t.env, "No"),
         &999_999u64,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     let mut reqs: soroban_sdk::Vec<PoolSettleRequest> = soroban_sdk::Vec::new(&t.env);
@@ -4227,6 +4278,7 @@ fn test_list_pools_empty_returns_empty() {
     env.mock_all_auths();
     let contract_id = env.register(PredinexContract, ());
     let client = PredinexContractClient::new(&env, &contract_id);
+    client.initialize(&Address::generate(&env), &Address::generate(&env));
     let result = client.list_pools(&1, &20);
     assert_eq!(result.len(), 0, "no pools created must return empty vec");
 }
@@ -4286,6 +4338,7 @@ fn test_list_pools_limit_capped_at_20() {
             &String::from_str(&env, "Yes"),
             &String::from_str(&env, "No"),
             &3_600u64,
+            &MIN_CREATOR_DEPOSIT,
         );
     }
     // Requesting 50 must be capped at 20.
@@ -4573,6 +4626,7 @@ fn h1_double_fee_fix_treasury_correct_with_multiple_winners() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600u64,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&winner1, &pool_id, &0, &300, &None::<Address>); // 300 on A
@@ -5214,6 +5268,85 @@ fn m9_update_twap_emits_twap_updated_event() {
     assert_eq!(payload.odds.get(1).unwrap(), 2000); // 100/500 * 10000
 }
 
+// ── Initialization guard tests (#586) ─────────────────────────────────────────
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_create_pool_not_initialized() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, PredinexContract);
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.create_pool(
+        &Address::generate(&env),
+        &String::from_str(&env, "Title"),
+        &String::from_str(&env, "Description"),
+        &String::from_str(&env, "A"),
+        &String::from_str(&env, "B"),
+        &3600,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_place_bet_not_initialized() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, PredinexContract);
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.place_bet(&Address::generate(&env), &1, &0, &100, &None);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_settle_pool_not_initialized() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, PredinexContract);
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.settle_pool(&Address::generate(&env), &1, &0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_claim_winnings_not_initialized() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, PredinexContract);
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.claim_winnings(&Address::generate(&env), &1);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_get_pool_not_initialized() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, PredinexContract);
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.get_pool(&1);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_get_user_bet_not_initialized() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, PredinexContract);
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.get_user_bet(&1, &Address::generate(&env));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_get_pool_count_not_initialized() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, PredinexContract);
+    let client = PredinexContractClient::new(&env, &contract_id);
+
+    client.get_pool_count();
+}
+
 // ── User claim analytics ──────────────────────────────────────────────────────
 
 /// N1: get_total_user_claims returns cumulative winnings across multiple pools.
@@ -5405,7 +5538,7 @@ fn n4_get_user_claim_history_pagination() {
     // Paginated: start=1, limit=1 → 1 entry (the second one)
     let page = client.get_user_claim_history(&user, &1, &1);
     assert_eq!(page.len(), 1);
-    assert_eq!(page.get(0).unwrap().pool_id, 2); // pool IDs are 1-based: pool 1, pool 2, pool 3 → second entry is pool 2
+    assert_eq!(page.get(0).unwrap().pool_id, 2);
 
     // Paginated: start=5 (beyond length) → empty
     let empty = client.get_user_claim_history(&user, &5, &10);
@@ -5430,4 +5563,3 @@ fn n5_get_user_claim_history_empty_for_no_claims() {
     let history = client.get_user_claim_history(&user, &0, &10);
     assert_eq!(history.len(), 0);
 }
-

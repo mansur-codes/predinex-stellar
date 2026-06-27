@@ -4,7 +4,7 @@
 #![allow(clippy::too_many_arguments)]
 extern crate alloc;
 use alloc::vec;
-use soroban_sdk::{
+use soroban_sdk::{panic_with_error, 
     contract, contracterror, contractimpl, contracttype, token, Address, Env, String, Symbol, Vec,
 };
 
@@ -22,6 +22,7 @@ mod fuzz;
 mod e2e_tests;
 mod webhook_test;
 mod multi_asset_tests;
+mod create_pool_validation_tests;
 
 // ── Issue #175: Event schema versioning ──────────────────────────────────────
 //
@@ -238,8 +239,10 @@ const MAX_WEBHOOK_URL_LENGTH: u32 = 512;
 
 /// #151 — Minimum pool lifetime in seconds (matches `web/docs/POOL_DURATION.md`).
 const MIN_POOL_DURATION_SECS: u64 = 300;
-/// #151 — Maximum pool lifetime in seconds (matches web validators / tests).
-const MAX_POOL_DURATION_SECS: u64 = 1_000_000;
+/// #570 — Maximum pool lifetime in seconds (~1 year).
+const MAX_POOL_DURATION_SECS: u64 = 31_536_000;
+/// #570 — Minimum creator deposit in stroops (1 XLM).
+pub const MIN_CREATOR_DEPOSIT: i128 = 10_000_000;
 
 /// #154 — Maximum length for pool title in bytes.
 const MAX_TITLE_LENGTH: u32 = 100;
@@ -1845,6 +1848,14 @@ impl PredinexContract {
         if duration == 0 || duration > MAX_POOL_DURATION_SECS {
             return Err(ContractError::DurationTooLong);
         }
+        // #570 — The computed deadline must be strictly in the future.
+        let deadline = created_at
+            .checked_add(duration)
+            .ok_or(ContractError::ExpiryOverflow)?;
+        if deadline <= env.ledger().timestamp() {
+            return Err(ContractError::DeadlineInPast);
+        }
+
         if twap_period_secs == 0 {
             return Err(ContractError::DurationTooShort);
         }
@@ -1878,7 +1889,7 @@ impl PredinexContract {
             token_client.transfer(&creator, &treasury_recipient, &creation_fee);
         }
 
-        let pool_id = Self::get_pool_counter(env);
+        let pool_id = Self::get_pool_counter(env) + 1;
         let expiry = created_at
             .checked_add(duration)
             .ok_or(ContractError::ExpiryOverflow)?;
@@ -1947,7 +1958,7 @@ impl PredinexContract {
 
         env.storage()
             .persistent()
-            .set(&DataKey::PoolCounter, &(pool_id + 1));
+            .set(&DataKey::PoolCounter, &pool_id);
 
         env.events().publish(
             (Symbol::new(env, "create_pool"), pool_id),
@@ -1971,8 +1982,17 @@ impl PredinexContract {
         outcome_a: String,
         outcome_b: String,
         duration: u64,
+        amount: i128,
     ) -> Result<u32, ContractError> {
+        if !Self::is_initialized(&env) {
+            panic_with_error!(&env, ContractError::NotInitialized);
+        }
         creator.require_auth();
+
+        // #570 — Minimum creator deposit.
+        if amount < MIN_CREATOR_DEPOSIT {
+            return Err(ContractError::InsufficientCreatorDeposit);
+        }
 
         let mut outcomes = Vec::new(&env);
         outcomes.push_back(outcome_a);
@@ -2209,17 +2229,17 @@ impl PredinexContract {
 
     pub fn get_scheduled_pools(env: Env, start_id: u32, count: u32) -> Vec<ScheduledPool> {
         let mut scheduled = Vec::new(&env);
-        let max_id = Self::get_pool_count(env.clone());
+        let pool_count = Self::get_pool_count(env.clone());
 
         // Early return if start_id is beyond the pool count to prevent overflow
-        if start_id >= max_id {
+        if start_id > pool_count {
             return scheduled;
         }
 
         let effective_count = if count > 100 { 100 } else { count };
         for i in 0..effective_count {
             let pool_id = start_id + i;
-            if pool_id >= max_id {
+            if pool_id > pool_count {
                 break;
             }
             if let Some(item) = env
@@ -2241,6 +2261,9 @@ impl PredinexContract {
         amount: i128,
         referrer: Option<Address>,
     ) -> Result<(), ContractError> {
+        if !Self::is_initialized(&env) {
+            panic_with_error!(&env, ContractError::NotInitialized);
+        }
         user.require_auth();
 
         Self::require_not_paused(&env)?;
@@ -3307,6 +3330,9 @@ impl PredinexContract {
         pool_id: u32,
         winning_outcome: u32,
     ) -> Result<(), ContractError> {
+        if !Self::is_initialized(&env) {
+            panic_with_error!(&env, ContractError::NotInitialized);
+        }
         caller.require_auth();
         Self::settle_single_pool(&env, &caller, pool_id, winning_outcome)
     }
@@ -3568,6 +3594,9 @@ impl PredinexContract {
     ///
     /// See `web/docs/PAYOUT_ROUNDING.md` for indexer / UI guidance.
     pub fn claim_winnings(env: Env, user: Address, pool_id: u32) -> Result<i128, ContractError> {
+        if !Self::is_initialized(&env) {
+            panic_with_error!(&env, ContractError::NotInitialized);
+        }
         user.require_auth();
         Self::claim_winnings_internal(&env, user, pool_id)
     }
@@ -4561,6 +4590,9 @@ impl PredinexContract {
     /// Return pool data and extend its TTL on every read so active pools stay
     /// accessible throughout their lifecycle. (#189)
     pub fn get_pool(env: Env, pool_id: u32) -> Option<Pool> {
+        if !Self::is_initialized(&env) {
+            panic_with_error!(&env, ContractError::NotInitialized);
+        }
         let pool: Option<Pool> = env.storage().persistent().get(&DataKey::Pool(pool_id));
         if pool.is_some() {
             env.storage().persistent().extend_ttl(
@@ -4620,20 +4652,23 @@ impl PredinexContract {
     }
 
     pub fn get_pool_count(env: Env) -> u32 {
+        if !Self::is_initialized(&env) {
+            panic_with_error!(&env, ContractError::NotInitialized);
+        }
         env.storage()
             .persistent()
             .get(&DataKey::PoolCounter)
-            .unwrap_or(1)
+            .unwrap_or(0)
     }
 
     /// Get a batch of pools for pagination-friendly listing.
     /// Returns pools from start_id up to count pools (or fewer if some don't exist).
     pub fn get_pools_batch(env: Env, start_id: u32, count: u32) -> Vec<Option<Pool>> {
         let mut pools = Vec::new(&env);
-        let max_id = Self::get_pool_count(env.clone());
+        let pool_count = Self::get_pool_count(env.clone());
 
         // Early return if start_id is beyond the pool count to prevent overflow
-        if start_id >= max_id {
+        if start_id > pool_count {
             return pools;
         }
 
@@ -4641,7 +4676,7 @@ impl PredinexContract {
 
         for i in 0..effective_count {
             let pool_id = start_id + i;
-            if pool_id >= max_id {
+            if pool_id > pool_count {
                 break;
             }
             let pool = env.storage().persistent().get(&DataKey::Pool(pool_id));
@@ -4656,16 +4691,16 @@ impl PredinexContract {
     /// Callable by anyone (no auth required). Pools are returned in ascending
     /// pool-ID order (which matches insertion order since IDs are sequential).
     /// `start` is the 1-based pool ID to begin from; `limit` is capped at 20
-    /// to bound ledger reads. Returns an empty vec when `start >= pool_counter`.
+    /// to bound ledger reads. Returns an empty vec when `start > pool_count`.
     pub fn list_pools(env: Env, start: u32, limit: u32) -> Vec<Pool> {
         let effective_limit = if limit > 20 { 20 } else { limit };
-        let max_id = Self::get_pool_count(env.clone());
+        let pool_count = Self::get_pool_count(env.clone());
 
-        if start >= max_id || effective_limit == 0 {
+        if start > pool_count || effective_limit == 0 {
             return Vec::new(&env);
         }
 
-        let end = (start + effective_limit).min(max_id);
+        let end = (start + effective_limit).min(pool_count + 1);
         let mut result = Vec::new(&env);
         for pool_id in start..end {
             if let Some(pool) = env
@@ -5033,10 +5068,10 @@ impl PredinexContract {
         count: u32,
     ) -> Vec<UserPoolPosition> {
         let mut result = Vec::new(&env);
-        let max_id = Self::get_pool_count(env.clone());
+        let pool_count = Self::get_pool_count(env.clone());
 
         // Early return if start_id is beyond the pool count to prevent overflow
-        if start_id >= max_id {
+        if start_id > pool_count {
             return result;
         }
 
@@ -5044,7 +5079,7 @@ impl PredinexContract {
 
         for i in 0..effective_count {
             let pool_id = start_id + i;
-            if pool_id >= max_id {
+            if pool_id > pool_count {
                 break;
             }
             let key = DataKey::UserBet(pool_id, user.clone());
@@ -5065,11 +5100,16 @@ impl PredinexContract {
         result
     }
 
+
+    fn is_initialized(env: &Env) -> bool {
+        env.storage().persistent().has(&DataKey::Token)
+    }
+
     fn get_pool_counter(env: &Env) -> u32 {
         env.storage()
             .persistent()
             .get(&DataKey::PoolCounter)
-            .unwrap_or(1)
+            .unwrap_or(0)
     }
 
     fn require_not_paused(env: &Env) -> Result<(), ContractError> {
@@ -5214,6 +5254,9 @@ impl PredinexContract {
 
     /// Return the user's bet record and extend its TTL on every read. (#189)
     pub fn get_user_bet(env: Env, pool_id: u32, user: Address) -> Option<UserBet> {
+        if !Self::is_initialized(&env) {
+            panic_with_error!(&env, ContractError::NotInitialized);
+        }
         let key = DataKey::UserBet(pool_id, user);
         let bet: Option<UserBet> = env.storage().persistent().get(&key);
         if bet.is_some() {
