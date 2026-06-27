@@ -112,6 +112,8 @@ pub enum DataKey {
     PoolTreasuryCredited(u32),
     /// #191 — contract state schema version stored on-chain for compatibility checks.
     ContractVersion,
+    /// #635 — template that was used to create this pool, if any.
+    PoolTemplateId(u32),
     /// #176 — who triggered settlement for this pool (Creator or Operator).
     PoolSettlementSource(u32),
     /// Maximum allowed total pool size. 0 disables the cap.
@@ -458,6 +460,11 @@ pub struct Pool {
     /// lifetime figure that persists unchanged through settlement and claims —
     /// an on-chain source for analytics displays without an off-chain indexer.
     pub cumulative_volume: i128,
+    /// #635 — The template this pool was created from, if any.
+    /// `Some(template_id)` when the pool was created via
+    /// `create_pool_from_template`; `None` for pools created directly via
+    /// `create_pool` or `create_pool_with_twap_period`.
+    pub template_id: Option<u32>,
 }
 
 #[derive(Clone)]
@@ -1833,6 +1840,7 @@ impl PredinexContract {
         created_at: u64,
         status: PoolStatus,
         twap_period_secs: u64,
+        template_id: Option<u32>,
     ) -> Result<u32, ContractError> {
         // Check length bounds before calling validate_non_empty_string, which
         // calls copy_into_slice internally. Attempting to copy an oversized
@@ -1929,6 +1937,7 @@ impl PredinexContract {
             expiry,
             status,
             cumulative_volume: 0,
+            template_id,
         };
 
         let mut totals = Vec::new(env);
@@ -2026,6 +2035,7 @@ impl PredinexContract {
             env.ledger().timestamp(),
             PoolStatus::Open,
             DEFAULT_TWAP_PERIOD_SECS,
+            None,
         )
     }
 
@@ -2055,6 +2065,7 @@ impl PredinexContract {
             env.ledger().timestamp(),
             PoolStatus::Open,
             twap_period_secs,
+            None,
         )
     }
 
@@ -2079,6 +2090,7 @@ impl PredinexContract {
             env.ledger().timestamp(),
             PoolStatus::Open,
             DEFAULT_TWAP_PERIOD_SECS,
+            None,
         )
     }
 
@@ -2104,6 +2116,7 @@ impl PredinexContract {
             env.ledger().timestamp(),
             PoolStatus::Open,
             twap_period_secs,
+            None,
         )
     }
 
@@ -2143,6 +2156,7 @@ impl PredinexContract {
             open_at,
             PoolStatus::Scheduled(open_at),
             DEFAULT_TWAP_PERIOD_SECS,
+            None,
         )?;
         let scheduled = ScheduledPool {
             pool_id,
@@ -4774,6 +4788,17 @@ impl PredinexContract {
         pool
     }
 
+    /// #635 — Return the template ID used to create this pool, if any.
+    ///
+    /// Returns `Some(template_id)` when the pool was created via
+    /// `create_pool_from_template`, or `None` for pools created directly.
+    /// This provides an on-chain way for frontends to determine template
+    /// association without off-chain indexing.
+    pub fn get_pool_template_id(env: Env, pool_id: u32) -> Option<u32> {
+        let pool: Option<Pool> = env.storage().persistent().get(&DataKey::Pool(pool_id));
+        pool?.template_id
+    }
+
     /// Return the per-pool bet limits (min/max) used by `place_bet`.
     ///
     /// When min/max were never explicitly set by the admin, returns defaults.
@@ -5197,6 +5222,7 @@ impl PredinexContract {
             env.ledger().timestamp(),
             PoolStatus::Open,
             DEFAULT_TWAP_PERIOD_SECS,
+            Some(template_id),
         )?;
         env.events().publish(
             (
