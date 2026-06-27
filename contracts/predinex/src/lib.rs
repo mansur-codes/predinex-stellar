@@ -3449,6 +3449,16 @@ impl PredinexContract {
         user.require_auth();
         Self::require_not_paused(&env)?;
 
+        // #618 — Multi-asset pools require per-token refund logic.
+        if env
+            .storage()
+            .persistent()
+            .get::<_, bool>(&DataKey::PoolIsMultiAsset(pool_id))
+            .unwrap_or(false)
+        {
+            return Err(ContractError::MultiAssetClaimRequired);
+        }
+
         let pool = env
             .storage()
             .persistent()
@@ -3524,6 +3534,16 @@ impl PredinexContract {
     pub fn claim_expired(env: Env, user: Address, pool_id: u32) -> Result<i128, ContractError> {
         user.require_auth();
         Self::require_not_paused(&env)?;
+
+        // #618 — Multi-asset pools require per-token refund logic.
+        if env
+            .storage()
+            .persistent()
+            .get::<_, bool>(&DataKey::PoolIsMultiAsset(pool_id))
+            .unwrap_or(false)
+        {
+            return Err(ContractError::MultiAssetClaimRequired);
+        }
 
         let pool = env
             .storage()
@@ -4109,6 +4129,16 @@ impl PredinexContract {
 
         for i in 0..cap {
             let pool_id = pool_ids.get(i).unwrap();
+
+            // #619 — Multi-asset pools must use claim_multi_asset_winnings.
+            if env
+                .storage()
+                .persistent()
+                .get::<_, bool>(&DataKey::PoolIsMultiAsset(pool_id))
+                .unwrap_or(false)
+            {
+                continue;
+            }
 
             let pool: Pool = match env.storage().persistent().get(&DataKey::Pool(pool_id)) {
                 Some(p) => p,
@@ -6074,6 +6104,24 @@ impl PredinexContract {
             .get::<_, Pool>(&DataKey::Pool(pool_id))
             .ok_or(ContractError::PoolNotFound)?;
 
+        // #615 — Auto-thaw cooling period (same logic as single-asset place_bet).
+        if pool.status == PoolStatus::Frozen {
+            if let Some(cooling_until) = env
+                .storage()
+                .persistent()
+                .get::<_, u64>(&DataKey::PoolCoolingUntil(pool_id))
+            {
+                if env.ledger().timestamp() >= cooling_until {
+                    pool.status = PoolStatus::Open;
+                    env.storage()
+                        .persistent()
+                        .remove(&DataKey::PoolCoolingUntil(pool_id));
+                } else {
+                    return Err(ContractError::PoolIsFrozen);
+                }
+            }
+        }
+
         if pool.status != PoolStatus::Open {
             return Err(ContractError::PoolNotOpen);
         }
@@ -6084,6 +6132,46 @@ impl PredinexContract {
         let outcomes = Self::read_outcomes(&env, pool_id, &pool);
         if outcome >= outcomes.len() {
             return Err(ContractError::InvalidOutcome);
+        }
+
+        // #615 — Per-wallet rate limiting (mirrors single-asset place_bet).
+        let max_bets_per_window: u32 = env
+            .storage()
+            .persistent()
+            .get::<_, u32>(&DataKey::RateLimitMaxBetsPerWindow)
+            .unwrap_or(0);
+        let window_secs: u64 = env
+            .storage()
+            .persistent()
+            .get::<_, u64>(&DataKey::RateLimitWindowSecs)
+            .unwrap_or(0);
+        if max_bets_per_window > 0 && window_secs > 0 {
+            let now = env.ledger().timestamp();
+            let key = DataKey::WalletRateLimit(user.clone());
+            let mut rate_state = env
+                .storage()
+                .persistent()
+                .get::<_, WalletRateLimitState>(&key)
+                .unwrap_or(WalletRateLimitState {
+                    window_start: now,
+                    used: 0,
+                });
+
+            if now.saturating_sub(rate_state.window_start) >= window_secs {
+                rate_state.window_start = now;
+                rate_state.used = 0;
+            }
+            if rate_state.used >= max_bets_per_window {
+                return Err(ContractError::RateLimitExceeded);
+            }
+            rate_state.used = rate_state
+                .used
+                .checked_add(1)
+                .ok_or(ContractError::RateLimitExceeded)?;
+            env.storage().persistent().set(&key, &rate_state);
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, POOL_BUMP_THRESHOLD, POOL_BUMP_TARGET);
         }
 
         // Transfer bet_token from user to contract.
@@ -6250,7 +6338,64 @@ impl PredinexContract {
             );
         }
 
-        let _ = new_total; // used for cooling check in single-asset path; omit here.
+        // #615 — Max pool size enforcement (mirrors single-asset place_bet).
+        let max_pool_size: i128 = env
+            .storage()
+            .persistent()
+            .get::<_, i128>(&DataKey::MaxPoolSize)
+            .unwrap_or(DEFAULT_MAX_POOL_SIZE_STROOPS);
+        if max_pool_size > 0 && new_total > max_pool_size {
+            return Err(ContractError::PoolSizeLimitExceeded);
+        }
+
+        // #615 — Large-pool cooling threshold (mirrors single-asset place_bet).
+        let large_pool_threshold: i128 = env
+            .storage()
+            .persistent()
+            .get::<_, i128>(&DataKey::LargePoolThreshold)
+            .unwrap_or(DEFAULT_LARGE_POOL_THRESHOLD_STROOPS);
+        let cooling_period_secs: u64 = env
+            .storage()
+            .persistent()
+            .get::<_, u64>(&DataKey::LargePoolCoolingPeriodSecs)
+            .unwrap_or(DEFAULT_LARGE_POOL_COOLING_PERIOD_SECS);
+        if large_pool_threshold > 0
+            && cooling_period_secs > 0
+            && current_total < large_pool_threshold
+            && new_total >= large_pool_threshold
+            && pool.status == PoolStatus::Open
+        {
+            let cooling_until = env
+                .ledger()
+                .timestamp()
+                .checked_add(cooling_period_secs)
+                .ok_or(ContractError::ExpiryOverflow)?;
+            pool.status = PoolStatus::Frozen;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Pool(pool_id), &pool);
+            env.storage().persistent().extend_ttl(
+                &DataKey::Pool(pool_id),
+                POOL_BUMP_THRESHOLD,
+                POOL_BUMP_TARGET,
+            );
+            env.storage()
+                .persistent()
+                .set(&DataKey::PoolCoolingUntil(pool_id), &cooling_until);
+            env.storage().persistent().extend_ttl(
+                &DataKey::PoolCoolingUntil(pool_id),
+                POOL_BUMP_THRESHOLD,
+                POOL_BUMP_TARGET,
+            );
+            env.events().publish(
+                (
+                    Symbol::new(&env, "pool_cooling_started"),
+                    event_version(&env),
+                    pool_id,
+                ),
+                (cooling_until, new_total),
+            );
+        }
         Ok(())
     }
 
@@ -6367,14 +6512,68 @@ impl PredinexContract {
         }
 
         // Update payout state bookkeeping.
-        payout_state.claimed_winning_stake = payout_state
+        let new_claimed = payout_state
             .claimed_winning_stake
             .checked_add(user_norm_winning)
             .ok_or(ContractError::PoolTotalOverflow)?;
+        payout_state.claimed_winning_stake = new_claimed;
         payout_state.paid_out = payout_state
             .paid_out
             .checked_add(total_norm_paid)
             .ok_or(ContractError::PoolTotalOverflow)?;
+
+        // #617 — Dust sweep: on the final claim, transfer remaining per-token
+        // dust to the treasury recipient so funds are not permanently locked.
+        let is_final_claim = new_claimed == total_norm_winning;
+        if is_final_claim {
+            let treasury_recipient: Address = env
+                .storage()
+                .persistent()
+                .get(&DataKey::TreasuryRecipient)
+                .ok_or(ContractError::NotInitialized)?;
+            for i in 0..allowed.len() {
+                let tok = allowed.get(i).unwrap();
+                let deposit: i128 = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::PoolTokenDeposit(pool_id, tok.clone()))
+                    .unwrap_or(0);
+                let fee_t: i128 = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::PoolTokenFeePending(pool_id, tok.clone()))
+                    .unwrap_or(0);
+                let net_t = deposit - fee_t;
+                if net_t <= 0 {
+                    continue;
+                }
+                let token_bal = token::Client::new(&env, &tok)
+                    .balance(&env.current_contract_address());
+                let dust = if token_bal > fee_t {
+                    token_bal - fee_t
+                } else {
+                    0
+                };
+                if dust > 0 {
+                    token::Client::new(&env, &tok).transfer(
+                        &env.current_contract_address(),
+                        &treasury_recipient,
+                        &dust,
+                    );
+                    let credit_key = DataKey::PoolTreasuryCredited(pool_id);
+                    let prev_credit: i128 =
+                        env.storage().persistent().get(&credit_key).unwrap_or(0);
+                    env.storage()
+                        .persistent()
+                        .set(&credit_key, &(prev_credit + dust));
+                    env.storage().persistent().extend_ttl(
+                        &credit_key,
+                        POOL_BUMP_THRESHOLD,
+                        POOL_BUMP_TARGET,
+                    );
+                }
+            }
+        }
 
         env.storage()
             .persistent()
