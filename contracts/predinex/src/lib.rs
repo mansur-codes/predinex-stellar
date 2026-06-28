@@ -4144,7 +4144,7 @@ impl PredinexContract {
             id += 1;
         }
         if results.is_empty() && saw_pending {
-            return Err(ContractError::PoolNotExpired);
+            return Err(ContractError::ScheduledClaimNotDue);
         }
         Ok(results)
     }
