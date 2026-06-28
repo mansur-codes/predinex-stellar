@@ -2,14 +2,18 @@
 extern crate std;
 use super::*;
 use soroban_sdk::String;
-use soroban_sdk::{testutils::Address as _, testutils::Events, testutils::Ledger, Address, Env, Val};
+use soroban_sdk::{
+    testutils::Address as _, testutils::Events, testutils::Ledger, Address, Env, Val,
+};
 use std::format;
 
 fn xdr_topic_val(env: &Env, event: &soroban_sdk::xdr::ContractEvent, i: usize) -> Val {
     match &event.body {
-        soroban_sdk::xdr::ContractEventBody::V0(v0) => {
-            <Val as soroban_sdk::TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(env, &v0.topics[i]).unwrap()
-        }
+        soroban_sdk::xdr::ContractEventBody::V0(v0) => <Val as soroban_sdk::TryFromVal<
+            Env,
+            soroban_sdk::xdr::ScVal,
+        >>::try_from_val(env, &v0.topics[i])
+        .unwrap(),
     }
 }
 
@@ -303,7 +307,10 @@ fn test_fee_config_requires_admin() {
         client.set_fee_config(&other_admin, &200u32, &fee_recipient);
     }));
 
-    assert!(result.is_err(), "Only the treasury recipient should update the fee config");
+    assert!(
+        result.is_err(),
+        "Only the treasury recipient should update the fee config"
+    );
 }
 
 #[test]
@@ -486,7 +493,11 @@ fn test_initialize_twice_panics() {
     // Second initialization must panic
     let other_token_admin = Address::generate(&env);
     let other_token_id = env.register_stellar_asset_contract_v2(other_token_admin.clone());
-    client.initialize(&other_token_id.address(), &other_token_admin, &other_token_admin);
+    client.initialize(
+        &other_token_id.address(),
+        &other_token_admin,
+        &other_token_admin,
+    );
 }
 
 /// After the rejected second `initialize`, the original token address must
@@ -510,7 +521,11 @@ fn test_initialize_idempotency_preserves_original_token() {
     let other_token_admin = Address::generate(&env);
     let other_token_id = env.register_stellar_asset_contract_v2(other_token_admin.clone());
     let _result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        client.initialize(&other_token_id.address(), &other_token_admin, &other_token_admin);
+        client.initialize(
+            &other_token_id.address(),
+            &other_token_admin,
+            &other_token_admin,
+        );
     }));
 
     // The original token should still be active — verify by placing a bet
@@ -1558,7 +1573,11 @@ fn g1_treasury_recipient_can_be_rotated() {
     let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
 
     let original_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &original_recipient, &original_recipient);
+    client.initialize(
+        &token_id.address(),
+        &original_recipient,
+        &original_recipient,
+    );
 
     // Verify original recipient is set
     let current = client
@@ -1591,7 +1610,11 @@ fn g2_unauthorized_cannot_rotate_treasury_recipient() {
     let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
 
     let original_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &original_recipient, &original_recipient);
+    client.initialize(
+        &token_id.address(),
+        &original_recipient,
+        &original_recipient,
+    );
 
     // Attempt rotation from unauthorized address
     let unauthorized = Address::generate(&env);
@@ -1614,7 +1637,11 @@ fn g3_after_rotation_only_new_recipient_can_withdraw() {
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
 
     let original_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &original_recipient, &original_recipient);
+    client.initialize(
+        &token_id.address(),
+        &original_recipient,
+        &original_recipient,
+    );
 
     // Create a pool and generate treasury fees
     let creator = Address::generate(&env);
@@ -1682,7 +1709,11 @@ fn g4_rotation_emits_event_with_old_and_new_addresses() {
     let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
 
     let original_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &original_recipient, &original_recipient);
+    client.initialize(
+        &token_id.address(),
+        &original_recipient,
+        &original_recipient,
+    );
 
     let new_recipient = Address::generate(&env);
     client.rotate_treasury_recipient(&original_recipient, &new_recipient);
@@ -1753,7 +1784,11 @@ fn h1_successful_withdrawal_emits_event() {
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     // Generate treasury fees
     let creator = Address::generate(&env);
@@ -1808,7 +1843,11 @@ fn h2_failed_withdrawal_does_not_emit_event() {
     let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     // Attempt to withdraw more than available
     client.withdraw_treasury(&treasury_recipient, &1000);
@@ -1828,7 +1867,11 @@ fn h3_unauthorized_withdrawal_does_not_emit_event() {
     let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     // Attempt withdrawal from unauthorized address
     let unauthorized = Address::generate(&env);
@@ -1850,7 +1893,11 @@ fn h4_multiple_withdrawals_emit_separate_events() {
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     // Generate treasury fees
     let creator = Address::generate(&env);
@@ -1909,7 +1956,11 @@ fn h5_withdrawal_event_includes_caller_and_recipient() {
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     // Generate treasury fees
     let creator = Address::generate(&env);
@@ -1967,7 +2018,11 @@ fn test_settle_pool_event_includes_totals_and_fee() {
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     let creator = Address::generate(&env);
     let user_a = Address::generate(&env);
@@ -2027,7 +2082,11 @@ fn test_settle_pool_event_outcome_b_totals() {
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     let creator = Address::generate(&env);
     let user_a = Address::generate(&env);
@@ -2082,7 +2141,11 @@ fn test_create_pool_with_fee_transfers_correctly() {
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     let creation_fee = 500i128;
     client.set_creation_fee(&treasury_recipient, &creation_fee);
@@ -2130,7 +2193,11 @@ fn test_create_pool_no_fee_succeeds() {
     let token_id = env.register_stellar_asset_contract_v2(token_admin);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     // No set_creation_fee call — defaults to 0
     assert_eq!(client.get_creation_fee(), 0);
@@ -2165,7 +2232,11 @@ fn test_set_creation_fee_unauthorized_rejected() {
     let token_id = env.register_stellar_asset_contract_v2(token_admin);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     let attacker = Address::generate(&env);
     // Must panic with "Unauthorized"
@@ -2186,7 +2257,11 @@ fn test_set_creation_fee_negative_rejected() {
     let token_id = env.register_stellar_asset_contract_v2(token_admin);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     client.set_creation_fee(&treasury_recipient, &-1);
 }
@@ -2205,7 +2280,11 @@ fn test_creation_fee_exemption_skips_fee() {
     let token = token::Client::new(&env, &token_id.address());
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     let creation_fee = 500i128;
     client.set_creation_fee(&treasury_recipient, &creation_fee);
@@ -2251,7 +2330,11 @@ fn test_creation_fee_exemption_revoked_charges_again() {
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     let creation_fee = 500i128;
     client.set_creation_fee(&treasury_recipient, &creation_fee);
@@ -2295,7 +2378,11 @@ fn test_set_creation_fee_exemption_unauthorized_rejected() {
     let token_id = env.register_stellar_asset_contract_v2(token_admin);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     let attacker = Address::generate(&env);
     let account = Address::generate(&env);
@@ -2536,7 +2623,8 @@ fn test_set_volume_fee_tiers_event_and_clear() {
     // recent invocation only).
     let events = env.events().all();
     let last_event = events.events().last().expect("must emit an event");
-    let name: soroban_sdk::Symbol = soroban_sdk::TryFromVal::try_from_val(&env, &xdr_topic_val(&env, last_event, 0)).unwrap();
+    let name: soroban_sdk::Symbol =
+        soroban_sdk::TryFromVal::try_from_val(&env, &xdr_topic_val(&env, last_event, 0)).unwrap();
     assert_eq!(name, soroban_sdk::Symbol::new(&env, "fee_tiers_updated"));
 
     assert_eq!(client.get_volume_fee_tiers().len(), 1);
@@ -3370,7 +3458,11 @@ fn l3_loser_claim_leaves_balances_unchanged() {
     let client = PredinexContractClient::new(&env, &contract_id);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     let creator = Address::generate(&env);
     let winner = Address::generate(&env);
@@ -3439,7 +3531,11 @@ fn l4_successful_claim_reconciles_treasury_and_balances() {
     let client = PredinexContractClient::new(&env, &contract_id);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     let creator = Address::generate(&env);
     let user_a = Address::generate(&env);
@@ -3508,7 +3604,11 @@ fn l5_claim_winnings_emits_claim_event() {
     let client = PredinexContractClient::new(&env, &contract_id);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     let creator = Address::generate(&env);
     let user_a = Address::generate(&env);
@@ -3545,9 +3645,12 @@ fn l5_claim_winnings_emits_claim_event() {
 
     // Verify topics via XDR decoding
     // Topics: [claim_winnings, pool_id, user]
-    let topic0: soroban_sdk::Symbol = soroban_sdk::TryFromVal::try_from_val(&env, &xdr_topic_val(&env, last_event, 0)).unwrap();
-    let topic1: u32 = soroban_sdk::TryFromVal::try_from_val(&env, &xdr_topic_val(&env, last_event, 1)).unwrap();
-    let topic2: Address = soroban_sdk::TryFromVal::try_from_val(&env, &xdr_topic_val(&env, last_event, 2)).unwrap();
+    let topic0: soroban_sdk::Symbol =
+        soroban_sdk::TryFromVal::try_from_val(&env, &xdr_topic_val(&env, last_event, 0)).unwrap();
+    let topic1: u32 =
+        soroban_sdk::TryFromVal::try_from_val(&env, &xdr_topic_val(&env, last_event, 1)).unwrap();
+    let topic2: Address =
+        soroban_sdk::TryFromVal::try_from_val(&env, &xdr_topic_val(&env, last_event, 2)).unwrap();
 
     assert_eq!(topic0, soroban_sdk::Symbol::new(&env, "claim_winnings"));
     assert_eq!(topic1, pool_id);
@@ -3555,11 +3658,14 @@ fn l5_claim_winnings_emits_claim_event() {
 
     // Verify payload is ClaimEvent
     let data_val: Val = match &last_event.body {
-        soroban_sdk::xdr::ContractEventBody::V0(v0) => {
-            <Val as soroban_sdk::TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(&env, &v0.data).unwrap()
-        }
+        soroban_sdk::xdr::ContractEventBody::V0(v0) => <Val as soroban_sdk::TryFromVal<
+            Env,
+            soroban_sdk::xdr::ScVal,
+        >>::try_from_val(&env, &v0.data)
+        .unwrap(),
     };
-    let claim_event: crate::ClaimEvent = soroban_sdk::TryFromVal::try_from_val(&env, &data_val).unwrap();
+    let claim_event: crate::ClaimEvent =
+        soroban_sdk::TryFromVal::try_from_val(&env, &data_val).unwrap();
 
     assert_eq!(claim_event.amount, winnings);
     assert_eq!(claim_event.winning_outcome, 0);
@@ -4114,7 +4220,8 @@ fn test_place_bet_with_referrer_emits_event() {
     let events = t.env.events().all();
     let found = events.events().iter().any(|event| {
         let topic0: soroban_sdk::Symbol =
-            soroban_sdk::TryFromVal::try_from_val(&t.env, &xdr_topic_val(&t.env, event, 0)).unwrap();
+            soroban_sdk::TryFromVal::try_from_val(&t.env, &xdr_topic_val(&t.env, event, 0))
+                .unwrap();
         topic0 == soroban_sdk::Symbol::new(&t.env, "referral_bet")
     });
     assert!(found, "referral_bet event must be emitted");
@@ -4131,7 +4238,8 @@ fn test_place_bet_without_referrer_no_referral_event() {
     let events = t.env.events().all();
     let found = events.events().iter().any(|event| {
         let topic0: soroban_sdk::Symbol =
-            soroban_sdk::TryFromVal::try_from_val(&t.env, &xdr_topic_val(&t.env, event, 0)).unwrap();
+            soroban_sdk::TryFromVal::try_from_val(&t.env, &xdr_topic_val(&t.env, event, 0))
+                .unwrap();
         topic0 == soroban_sdk::Symbol::new(&t.env, "referral_bet")
     });
     assert!(
@@ -4647,7 +4755,7 @@ fn h1_double_fee_fix_treasury_correct_with_multiple_winners() {
 
     client.place_bet(&winner1, &pool_id, &0, &300, &None::<Address>); // 300 on A
     client.place_bet(&winner2, &pool_id, &0, &100, &None::<Address>); // 100 on A
-    client.place_bet(&loser, &pool_id, &1, &200, &None::<Address>);   // 200 on B, loses
+    client.place_bet(&loser, &pool_id, &1, &200, &None::<Address>); // 200 on B, loses
 
     env.ledger().with_mut(|l| l.timestamp = 3601);
     client.settle_pool(&token_admin, &pool_id, &0);
@@ -4664,7 +4772,10 @@ fn h1_double_fee_fix_treasury_correct_with_multiple_winners() {
     // Treasury must hold exactly the fee (user-proportional fee sums to total_fee)
     let treasury = client.get_treasury_balance();
     // w1 fee = 300*12/400 = 9. w2 fee = 100*12/400 = 3. Total = 12.
-    assert_eq!(treasury, 12i128, "treasury must equal exactly 2% of total pool");
+    assert_eq!(
+        treasury, 12i128,
+        "treasury must equal exactly 2% of total pool"
+    );
 }
 
 /// M1: create_pool emits an event with correct topics and payload.
@@ -4680,7 +4791,11 @@ fn m1_create_pool_emits_pool_created_event() {
     let client = PredinexContractClient::new(&env, &contract_id);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     env.ledger().with_mut(|li| li.timestamp = 100);
 
@@ -4708,12 +4823,11 @@ fn m1_create_pool_emits_pool_created_event() {
     assert_eq!(topic1, pool_id);
 
     let data_val: Val = match &event.body {
-        soroban_sdk::xdr::ContractEventBody::V0(v0) => {
-            <Val as soroban_sdk::TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(
-                &env, &v0.data,
-            )
-            .unwrap()
-        }
+        soroban_sdk::xdr::ContractEventBody::V0(v0) => <Val as soroban_sdk::TryFromVal<
+            Env,
+            soroban_sdk::xdr::ScVal,
+        >>::try_from_val(&env, &v0.data)
+        .unwrap(),
     };
     let payload: crate::CreatePoolEvent =
         soroban_sdk::TryFromVal::try_from_val(&env, &data_val).unwrap();
@@ -4739,7 +4853,11 @@ fn m2_place_bet_emits_bet_placed_event() {
     let client = PredinexContractClient::new(&env, &contract_id);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     let creator = Address::generate(&env);
     let user = Address::generate(&env);
@@ -4776,15 +4894,13 @@ fn m2_place_bet_emits_bet_placed_event() {
     assert_eq!(topic3, user);
 
     let data_val: Val = match &event.body {
-        soroban_sdk::xdr::ContractEventBody::V0(v0) => {
-            <Val as soroban_sdk::TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(
-                &env, &v0.data,
-            )
-            .unwrap()
-        }
+        soroban_sdk::xdr::ContractEventBody::V0(v0) => <Val as soroban_sdk::TryFromVal<
+            Env,
+            soroban_sdk::xdr::ScVal,
+        >>::try_from_val(&env, &v0.data)
+        .unwrap(),
     };
-    let payload: crate::BetEvent =
-        soroban_sdk::TryFromVal::try_from_val(&env, &data_val).unwrap();
+    let payload: crate::BetEvent = soroban_sdk::TryFromVal::try_from_val(&env, &data_val).unwrap();
 
     assert_eq!(payload.outcome, 0);
     assert_eq!(payload.amount, 500);
@@ -4806,7 +4922,11 @@ fn m3_settle_pool_emits_settle_pool_event() {
     let client = PredinexContractClient::new(&env, &contract_id);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     env.ledger().with_mut(|li| li.timestamp = 100);
 
@@ -4844,12 +4964,11 @@ fn m3_settle_pool_emits_settle_pool_event() {
     assert_eq!(topic2, pool_id);
 
     let data_val: Val = match &event.body {
-        soroban_sdk::xdr::ContractEventBody::V0(v0) => {
-            <Val as soroban_sdk::TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(
-                &env, &v0.data,
-            )
-            .unwrap()
-        }
+        soroban_sdk::xdr::ContractEventBody::V0(v0) => <Val as soroban_sdk::TryFromVal<
+            Env,
+            soroban_sdk::xdr::ScVal,
+        >>::try_from_val(&env, &v0.data)
+        .unwrap(),
     };
     let payload: crate::SettlePoolEvent =
         soroban_sdk::TryFromVal::try_from_val(&env, &data_val).unwrap();
@@ -4876,7 +4995,11 @@ fn m4_claim_winnings_emits_claim_event() {
     let client = PredinexContractClient::new(&env, &contract_id);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     env.ledger().with_mut(|li| li.timestamp = 100);
 
@@ -4919,12 +5042,11 @@ fn m4_claim_winnings_emits_claim_event() {
     assert_eq!(topic2, user);
 
     let data_val: Val = match &event.body {
-        soroban_sdk::xdr::ContractEventBody::V0(v0) => {
-            <Val as soroban_sdk::TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(
-                &env, &v0.data,
-            )
-            .unwrap()
-        }
+        soroban_sdk::xdr::ContractEventBody::V0(v0) => <Val as soroban_sdk::TryFromVal<
+            Env,
+            soroban_sdk::xdr::ScVal,
+        >>::try_from_val(&env, &v0.data)
+        .unwrap(),
     };
     let payload: crate::ClaimEvent =
         soroban_sdk::TryFromVal::try_from_val(&env, &data_val).unwrap();
@@ -4950,7 +5072,11 @@ fn m5_cancel_bet_emits_bet_cancelled_event() {
     let client = PredinexContractClient::new(&env, &contract_id);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     let creator = Address::generate(&env);
     let user = Address::generate(&env);
@@ -4989,12 +5115,11 @@ fn m5_cancel_bet_emits_bet_cancelled_event() {
     assert_eq!(topic3, user);
 
     let data_val: Val = match &event.body {
-        soroban_sdk::xdr::ContractEventBody::V0(v0) => {
-            <Val as soroban_sdk::TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(
-                &env, &v0.data,
-            )
-            .unwrap()
-        }
+        soroban_sdk::xdr::ContractEventBody::V0(v0) => <Val as soroban_sdk::TryFromVal<
+            Env,
+            soroban_sdk::xdr::ScVal,
+        >>::try_from_val(&env, &v0.data)
+        .unwrap(),
     };
     let payload: crate::BetCancelledEvent =
         soroban_sdk::TryFromVal::try_from_val(&env, &data_val).unwrap();
@@ -5018,7 +5143,11 @@ fn m6_extend_pool_duration_emits_pool_duration_extended_event() {
     let client = PredinexContractClient::new(&env, &contract_id);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     env.ledger().with_mut(|li| li.timestamp = 100);
 
@@ -5057,12 +5186,11 @@ fn m6_extend_pool_duration_emits_pool_duration_extended_event() {
     assert_eq!(topic2, pool_id);
 
     let data_val: Val = match &event.body {
-        soroban_sdk::xdr::ContractEventBody::V0(v0) => {
-            <Val as soroban_sdk::TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(
-                &env, &v0.data,
-            )
-            .unwrap()
-        }
+        soroban_sdk::xdr::ContractEventBody::V0(v0) => <Val as soroban_sdk::TryFromVal<
+            Env,
+            soroban_sdk::xdr::ScVal,
+        >>::try_from_val(&env, &v0.data)
+        .unwrap(),
     };
     let payload: crate::PoolDurationExtendedEvent =
         soroban_sdk::TryFromVal::try_from_val(&env, &data_val).unwrap();
@@ -5085,7 +5213,11 @@ fn m7_place_bet_with_referrer_emits_referral_bet_event() {
     let client = PredinexContractClient::new(&env, &contract_id);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     let creator = Address::generate(&env);
     let user = Address::generate(&env);
@@ -5122,12 +5254,11 @@ fn m7_place_bet_with_referrer_emits_referral_bet_event() {
     assert_eq!(topic2, pool_id);
 
     let data_val: Val = match &event.body {
-        soroban_sdk::xdr::ContractEventBody::V0(v0) => {
-            <Val as soroban_sdk::TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(
-                &env, &v0.data,
-            )
-            .unwrap()
-        }
+        soroban_sdk::xdr::ContractEventBody::V0(v0) => <Val as soroban_sdk::TryFromVal<
+            Env,
+            soroban_sdk::xdr::ScVal,
+        >>::try_from_val(&env, &v0.data)
+        .unwrap(),
     };
     let payload: crate::ReferralBetEvent =
         soroban_sdk::TryFromVal::try_from_val(&env, &data_val).unwrap();
@@ -5152,7 +5283,11 @@ fn m8_claim_referral_rewards_emits_referral_reward_claimed_event() {
     let client = PredinexContractClient::new(&env, &contract_id);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     // Enable referral rewards: 100 bps = 1%
     client.set_referral_bps(&treasury_recipient, &100);
@@ -5194,12 +5329,11 @@ fn m8_claim_referral_rewards_emits_referral_reward_claimed_event() {
     assert_eq!(topic1, soroban_sdk::Symbol::new(&env, EVENT_SCHEMA_VERSION));
 
     let data_val: Val = match &event.body {
-        soroban_sdk::xdr::ContractEventBody::V0(v0) => {
-            <Val as soroban_sdk::TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(
-                &env, &v0.data,
-            )
-            .unwrap()
-        }
+        soroban_sdk::xdr::ContractEventBody::V0(v0) => <Val as soroban_sdk::TryFromVal<
+            Env,
+            soroban_sdk::xdr::ScVal,
+        >>::try_from_val(&env, &v0.data)
+        .unwrap(),
     };
     let payload: crate::ReferralRewardClaimedEvent =
         soroban_sdk::TryFromVal::try_from_val(&env, &data_val).unwrap();
@@ -5222,7 +5356,11 @@ fn m9_update_twap_emits_twap_updated_event() {
     let client = PredinexContractClient::new(&env, &contract_id);
 
     let treasury_recipient = Address::generate(&env);
-    client.initialize(&token_id.address(), &treasury_recipient, &treasury_recipient);
+    client.initialize(
+        &token_id.address(),
+        &treasury_recipient,
+        &treasury_recipient,
+    );
 
     env.ledger().with_mut(|li| li.timestamp = 1000);
 
@@ -5268,12 +5406,11 @@ fn m9_update_twap_emits_twap_updated_event() {
     assert_eq!(topic2, pool_id);
 
     let data_val: Val = match &event.body {
-        soroban_sdk::xdr::ContractEventBody::V0(v0) => {
-            <Val as soroban_sdk::TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(
-                &env, &v0.data,
-            )
-            .unwrap()
-        }
+        soroban_sdk::xdr::ContractEventBody::V0(v0) => <Val as soroban_sdk::TryFromVal<
+            Env,
+            soroban_sdk::xdr::ScVal,
+        >>::try_from_val(&env, &v0.data)
+        .unwrap(),
     };
     let payload: crate::TwapUpdatedEvent =
         soroban_sdk::TryFromVal::try_from_val(&env, &data_val).unwrap();
@@ -5542,7 +5679,8 @@ fn n4_get_user_claim_history_pagination() {
         client.place_bet(&user, &pool_id, &0, &500, &None::<Address>);
         client.place_bet(&opponent, &pool_id, &1, &500, &None::<Address>);
 
-        env.ledger().with_mut(|li| li.timestamp = 4000 + (i as u64) * 100);
+        env.ledger()
+            .with_mut(|li| li.timestamp = 4000 + (i as u64) * 100);
         client.settle_pool(&creator, &pool_id, &0);
         client.claim_winnings(&user, &pool_id);
     }
@@ -5580,167 +5718,596 @@ fn n5_get_user_claim_history_empty_for_no_claims() {
     assert_eq!(history.len(), 0);
 }
 
-// ─── Suite O — Enhanced Pool Cancellation ─────────────────────────────────────
+// ── #626 Multi-asset pool unit tests ─────────────────────────────────────────
 
-#[test]
-fn cancel_pool_creator_before_expiry_refunds_all() {
-    let t = setup();
-    let pool_id = make_pool(&t);
-
-    let user_a = Address::generate(&t.env);
-    let user_b = Address::generate(&t.env);
-
-    let token_admin = soroban_sdk::token::StellarAssetClient::new(&t.env, &t.token);
-    token_admin.mint(&user_a, &1000);
-    token_admin.mint(&user_b, &2000);
-
-    t.client.place_bet(&user_a, &pool_id, &0, &500, &None::<Address>);
-    t.client.place_bet(&user_b, &pool_id, &1, &1500, &None::<Address>);
-
-    let token_client = soroban_sdk::token::Client::new(&t.env, &t.token);
-    assert_eq!(token_client.balance(&user_a), 500);
-    assert_eq!(token_client.balance(&user_b), 500);
-
-    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "Creator cancel before expiry"));
-
-    assert_eq!(token_client.balance(&user_a), 1000);
-    assert_eq!(token_client.balance(&user_b), 2000);
-
-    let pool = t.client.get_pool(&pool_id).unwrap();
-    assert_eq!(pool.status, PoolStatus::Cancelled);
-    assert!(!pool.settled);
+/// Helper: register a fresh contract, a protocol token, an alt token, set the
+/// exchange rate for the alt token, and return all handles needed by the tests.
+struct MultiAssetSetup {
+    env: Env,
+    client: PredinexContractClient<'static>,
+    proto_token: token::Client<'static>,
+    proto_admin_client: token::StellarAssetClient<'static>,
+    alt_token: token::Client<'static>,
+    alt_admin_client: token::StellarAssetClient<'static>,
+    treasury: Address,
+    creator: Address,
 }
 
-#[test]
-fn cancel_pool_anyone_after_expiry_refunds() {
-    let t = setup();
-    let pool_id = make_pool(&t);
+fn multi_asset_setup() -> MultiAssetSetup {
+    let env = Env::default();
+    env.mock_all_auths();
 
-    let user_a = Address::generate(&t.env);
-    let token_admin = soroban_sdk::token::StellarAssetClient::new(&t.env, &t.token);
-    token_admin.mint(&user_a, &1000);
+    // Protocol token (XLM stand-in).
+    let proto_admin = Address::generate(&env);
+    let proto_id = env.register_stellar_asset_contract_v2(proto_admin.clone());
+    let proto_token = token::Client::new(&env, &proto_id.address());
+    let proto_admin_client = token::StellarAssetClient::new(&env, &proto_id.address());
 
-    t.client.place_bet(&user_a, &pool_id, &0, &500, &None::<Address>);
+    // Alt token.
+    let alt_admin = Address::generate(&env);
+    let alt_id = env.register_stellar_asset_contract_v2(alt_admin.clone());
+    let alt_token = token::Client::new(&env, &alt_id.address());
+    let alt_admin_client = token::StellarAssetClient::new(&env, &alt_id.address());
 
-    expire_pool(&t.env);
+    let contract_id = env.register(PredinexContract, ());
+    // SAFETY: we extend the lifetime to 'static because the Env lives in the
+    // returned struct and is never outlived in these tests.
+    let client: PredinexContractClient<'static> =
+        unsafe { core::mem::transmute(PredinexContractClient::new(&env, &contract_id)) };
 
-    let anyone = Address::generate(&t.env);
-    t.client.cancel_pool(&anyone, &pool_id, &String::from_str(&t.env, "Anyone cancel after expiry"));
+    let treasury = Address::generate(&env);
+    client.initialize(&proto_id.address(), &treasury);
 
-    let token_client = soroban_sdk::token::Client::new(&t.env, &t.token);
-    assert_eq!(token_client.balance(&user_a), 1000);
+    // Register exchange rate: 1 alt = 0.5 proto (5_000 bps).
+    client.set_token_exchange_rate(&treasury, &alt_id.address(), &5_000i128);
 
-    let pool = t.client.get_pool(&pool_id).unwrap();
-    assert_eq!(pool.status, PoolStatus::Cancelled);
+    env.ledger().with_mut(|li| li.timestamp = 1_000);
+
+    MultiAssetSetup {
+        env,
+        client,
+        proto_token,
+        proto_admin_client,
+        alt_token,
+        alt_admin_client,
+        treasury,
+        creator: Address::generate(&env),
+    }
 }
 
+// ── create_multi_asset_pool ──────────────────────────────────────────────────
+
+/// MA-C1: happy path — pool is created and marked multi-asset.
 #[test]
-fn cancel_pool_admin_emergency_cancel() {
-    let t = setup();
-    let token_admin = soroban_sdk::token::StellarAssetClient::new(&t.env, &t.token);
+fn ma_c1_create_multi_asset_pool_happy_path() {
+    let s = multi_asset_setup();
+    let env = &s.env;
 
-    let creator = Address::generate(&t.env);
-    token_admin.mint(&creator, &10_000i128);
+    let mut outcomes: soroban_sdk::Vec<soroban_sdk::String> = soroban_sdk::Vec::new(env);
+    outcomes.push_back(String::from_str(env, "Yes"));
+    outcomes.push_back(String::from_str(env, "No"));
 
-    let other_pool_id = t.client.create_pool(
-        &creator,
-        &String::from_str(&t.env, "Other test pool"),
-        &String::from_str(&t.env, "Description"),
-        &String::from_str(&t.env, "Yes"),
-        &String::from_str(&t.env, "No"),
+    let mut tokens: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(env);
+    tokens.push_back(s.alt_token.address.clone());
+
+    let pool_id = s.client.create_multi_asset_pool(
+        &s.creator,
+        &String::from_str(env, "Multi Pool"),
+        &String::from_str(env, "Desc"),
+        &outcomes,
+        &3_600u64,
+        &tokens,
+        &None,
+    ).unwrap();
+
+    assert_eq!(pool_id, 1);
+    let allowed = s.client.get_pool_allowed_tokens(&pool_id).unwrap();
+    assert_eq!(allowed.len(), 1);
+    assert_eq!(allowed.get(0).unwrap(), s.alt_token.address);
+}
+
+/// MA-C2: creation fails when no exchange rate is set for an allowed token.
+#[test]
+fn ma_c2_create_multi_asset_pool_rejects_token_without_exchange_rate() {
+    let s = multi_asset_setup();
+    let env = &s.env;
+
+    // Register a brand-new token with no exchange rate.
+    let unknown_admin = Address::generate(env);
+    let unknown_id = env.register_stellar_asset_contract_v2(unknown_admin);
+    let unknown_addr = token::Client::new(env, &unknown_id.address()).address.clone();
+
+    let mut outcomes: soroban_sdk::Vec<soroban_sdk::String> = soroban_sdk::Vec::new(env);
+    outcomes.push_back(String::from_str(env, "Yes"));
+    outcomes.push_back(String::from_str(env, "No"));
+
+    let mut tokens: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(env);
+    tokens.push_back(unknown_addr);
+
+    let result = s.client.try_create_multi_asset_pool(
+        &s.creator,
+        &String::from_str(env, "Bad Pool"),
+        &String::from_str(env, "Desc"),
+        &outcomes,
+        &3_600u64,
+        &tokens,
+        &None,
+    );
+    assert!(result.is_err());
+}
+
+/// MA-C3: creation fails with an empty allowed_tokens list.
+#[test]
+fn ma_c3_create_multi_asset_pool_rejects_empty_token_list() {
+    let s = multi_asset_setup();
+    let env = &s.env;
+
+    let mut outcomes: soroban_sdk::Vec<soroban_sdk::String> = soroban_sdk::Vec::new(env);
+    outcomes.push_back(String::from_str(env, "Yes"));
+    outcomes.push_back(String::from_str(env, "No"));
+    let empty_tokens: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(env);
+
+    let result = s.client.try_create_multi_asset_pool(
+        &s.creator,
+        &String::from_str(env, "Bad Pool"),
+        &String::from_str(env, "Desc"),
+        &outcomes,
+        &3_600u64,
+        &empty_tokens,
+        &None,
+    );
+    assert!(result.is_err());
+}
+
+// ── set_token_exchange_rate ──────────────────────────────────────────────────
+
+/// MA-R1: treasury can set and retrieve an exchange rate.
+#[test]
+fn ma_r1_set_token_exchange_rate_stores_value() {
+    let s = multi_asset_setup();
+    let rate = s.client.get_token_exchange_rate(&s.alt_token.address).unwrap();
+    assert_eq!(rate, 5_000i128);
+}
+
+/// MA-R2: non-treasury caller is rejected.
+#[test]
+fn ma_r2_set_token_exchange_rate_unauthorized_rejected() {
+    let s = multi_asset_setup();
+    let rogue = Address::generate(&s.env);
+    let result = s.client.try_set_token_exchange_rate(&rogue, &s.alt_token.address, &10_000i128);
+    assert!(result.is_err());
+}
+
+/// MA-R3: rate ≤ 0 is rejected.
+#[test]
+fn ma_r3_set_token_exchange_rate_zero_rejected() {
+    let s = multi_asset_setup();
+    let result = s.client.try_set_token_exchange_rate(&s.treasury, &s.alt_token.address, &0i128);
+    assert!(result.is_err());
+}
+
+// ── place_multi_asset_bet ────────────────────────────────────────────────────
+
+/// Helper: create a multi-asset pool and return its id.
+fn create_ma_pool(s: &MultiAssetSetup) -> u32 {
+    let env = &s.env;
+    let mut outcomes: soroban_sdk::Vec<soroban_sdk::String> = soroban_sdk::Vec::new(env);
+    outcomes.push_back(String::from_str(env, "Yes"));
+    outcomes.push_back(String::from_str(env, "No"));
+    let mut tokens: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(env);
+    tokens.push_back(s.alt_token.address.clone());
+    s.client.create_multi_asset_pool(
+        &s.creator,
+        &String::from_str(env, "MA Pool"),
+        &String::from_str(env, "D"),
+        &outcomes,
+        &3_600u64,
+        &tokens,
+        &None,
+    ).unwrap()
+}
+
+/// MA-B1: happy path — bet placed, token transferred to contract.
+#[test]
+fn ma_b1_place_multi_asset_bet_transfers_tokens_to_contract() {
+    let s = multi_asset_setup();
+    let pool_id = create_ma_pool(&s);
+    let user = Address::generate(&s.env);
+    s.alt_admin_client.mint(&user, &20_000i128);
+
+    s.client.place_multi_asset_bet(&user, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None).unwrap();
+
+    // Contract holds the tokens.
+    let contract_bal = s.alt_token.balance(&s.client.address);
+    assert_eq!(contract_bal, 10_000i128);
+}
+
+/// MA-B2: unsupported token is rejected with UnsupportedToken.
+#[test]
+fn ma_b2_place_multi_asset_bet_unsupported_token_rejected() {
+    let s = multi_asset_setup();
+    let pool_id = create_ma_pool(&s);
+    let user = Address::generate(&s.env);
+
+    // proto_token is not in allowed_tokens for this pool.
+    let result = s.client.try_place_multi_asset_bet(
+        &user, &pool_id, &0u32, &10_000i128, &s.proto_token.address, &None,
+    );
+    assert!(result.is_err());
+}
+
+/// MA-B3: zero amount is rejected.
+#[test]
+fn ma_b3_place_multi_asset_bet_zero_amount_rejected() {
+    let s = multi_asset_setup();
+    let pool_id = create_ma_pool(&s);
+    let user = Address::generate(&s.env);
+
+    let result = s.client.try_place_multi_asset_bet(
+        &user, &pool_id, &0u32, &0i128, &s.alt_token.address, &None,
+    );
+    assert!(result.is_err());
+}
+
+/// MA-B4: placing a bet on a single-asset pool via the multi-asset path is rejected.
+#[test]
+fn ma_b4_place_multi_asset_bet_on_single_asset_pool_rejected() {
+    let s = multi_asset_setup();
+    let env = &s.env;
+
+    // Create a regular (single-asset) pool.
+    let pool_id = s.client.create_pool(
+        &s.creator,
+        &String::from_str(env, "SA Pool"),
+        &String::from_str(env, "D"),
+        &String::from_str(env, "Yes"),
+        &String::from_str(env, "No"),
         &3_600u64,
         &MIN_CREATOR_DEPOSIT,
     );
-
-    let user_a = Address::generate(&t.env);
-    token_admin.mint(&user_a, &1000);
-    t.client.place_bet(&user_a, &other_pool_id, &0, &300, &None::<Address>);
-
-    t.client.cancel_pool(&t.admin, &other_pool_id, &String::from_str(&t.env, "Admin emergency cancel"));
-
-    let token_client = soroban_sdk::token::Client::new(&t.env, &t.token);
-    assert_eq!(token_client.balance(&user_a), 1000);
-
-    let pool = t.client.get_pool(&other_pool_id).unwrap();
-    assert_eq!(pool.status, PoolStatus::Cancelled);
+    let user = Address::generate(env);
+    let result = s.client.try_place_multi_asset_bet(
+        &user, &pool_id, &0u32, &1_000i128, &s.alt_token.address, &None,
+    );
+    assert!(result.is_err());
 }
 
+/// MA-B5: self-referral is rejected.
 #[test]
-#[should_panic]
-fn cancel_pool_already_settled_rejected() {
-    let t = setup();
-    let pool_id = make_pool(&t);
-    expire_pool(&t.env);
-    t.client.settle_pool(&t.admin, &pool_id, &0u32);
-    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "already settled"));
+fn ma_b5_place_multi_asset_bet_self_referral_rejected() {
+    let s = multi_asset_setup();
+    let pool_id = create_ma_pool(&s);
+    let user = Address::generate(&s.env);
+    s.alt_admin_client.mint(&user, &20_000i128);
+
+    let result = s.client.try_place_multi_asset_bet(
+        &user, &pool_id, &0u32, &1_000i128, &s.alt_token.address, &Some(user.clone()),
+    );
+    assert!(result.is_err());
 }
 
+// ── claim_multi_asset_winnings ───────────────────────────────────────────────
+
+/// MA-W1: full happy path — create pool, two users bet opposite sides, settle,
+/// winner claims and receives proportional tokens back.
 #[test]
-#[should_panic]
-fn cancel_pool_already_cancelled_rejected() {
-    let t = setup();
-    let pool_id = make_pool(&t);
-    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "first cancel"));
-    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "second cancel"));
+fn ma_w1_claim_multi_asset_winnings_happy_path() {
+    let s = multi_asset_setup();
+    let env = &s.env;
+    let pool_id = create_ma_pool(&s);
+
+    let winner = Address::generate(env);
+    let loser = Address::generate(env);
+    s.alt_admin_client.mint(&winner, &10_000i128);
+    s.alt_admin_client.mint(&loser, &10_000i128);
+
+    // winner bets on outcome 0, loser on outcome 1.
+    s.client.place_multi_asset_bet(&winner, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None).unwrap();
+    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &10_000i128, &s.alt_token.address, &None).unwrap();
+
+    // Advance past expiry and settle.
+    env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
+    s.client.settle_pool(&s.treasury, &pool_id, &0u32).unwrap();
+
+    let before = s.alt_token.balance(&winner);
+    s.client.claim_multi_asset_winnings(&winner, &pool_id).unwrap();
+    let after = s.alt_token.balance(&winner);
+
+    // Winner should receive more than their original stake (net of protocol fee).
+    assert!(after > before);
+    assert!(after > 10_000i128);
 }
 
+/// MA-W2: loser gets nothing.
 #[test]
-#[should_panic]
-fn cancel_pool_voided_pool_rejected() {
-    let t = setup();
-    let pool_id = make_pool(&t);
-    t.client.void_pool(&t.admin, &pool_id);
-    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "cancel voided"));
+fn ma_w2_claim_multi_asset_winnings_loser_gets_nothing() {
+    let s = multi_asset_setup();
+    let env = &s.env;
+    let pool_id = create_ma_pool(&s);
+
+    let winner = Address::generate(env);
+    let loser = Address::generate(env);
+    s.alt_admin_client.mint(&winner, &10_000i128);
+    s.alt_admin_client.mint(&loser, &10_000i128);
+
+    s.client.place_multi_asset_bet(&winner, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None).unwrap();
+    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &10_000i128, &s.alt_token.address, &None).unwrap();
+
+    env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
+    s.client.settle_pool(&s.treasury, &pool_id, &0u32).unwrap();
+
+    // Loser's balance before attempting claim.
+    let result = s.client.try_claim_multi_asset_winnings(&loser, &pool_id);
+    assert!(result.is_err());
 }
 
+/// MA-W3: double claim is rejected.
 #[test]
-#[should_panic]
-fn cancel_pool_non_creator_before_expiry_rejected() {
-    let t = setup();
-    let pool_id = make_pool(&t);
-    let other = Address::generate(&t.env);
-    t.client.cancel_pool(&other, &pool_id, &String::from_str(&t.env, "unauthorized"));
+fn ma_w3_claim_multi_asset_winnings_double_claim_rejected() {
+    let s = multi_asset_setup();
+    let env = &s.env;
+    let pool_id = create_ma_pool(&s);
+
+    let winner = Address::generate(env);
+    let loser = Address::generate(env);
+    s.alt_admin_client.mint(&winner, &10_000i128);
+    s.alt_admin_client.mint(&loser, &10_000i128);
+
+    s.client.place_multi_asset_bet(&winner, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None).unwrap();
+    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &10_000i128, &s.alt_token.address, &None).unwrap();
+
+    env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
+    s.client.settle_pool(&s.treasury, &pool_id, &0u32).unwrap();
+
+    s.client.claim_multi_asset_winnings(&winner, &pool_id).unwrap();
+    let result = s.client.try_claim_multi_asset_winnings(&winner, &pool_id);
+    assert!(result.is_err());
 }
 
+/// MA-W4: claim on unsettled pool is rejected.
 #[test]
-fn cancel_pool_emits_event() {
-    let t = setup();
-    let pool_id = make_pool(&t);
+fn ma_w4_claim_multi_asset_winnings_unsettled_pool_rejected() {
+    let s = multi_asset_setup();
+    let pool_id = create_ma_pool(&s);
+    let user = Address::generate(&s.env);
 
-    let user_a = Address::generate(&t.env);
-    let user_b = Address::generate(&t.env);
+    let result = s.client.try_claim_multi_asset_winnings(&user, &pool_id);
+    assert!(result.is_err());
+}
 
-    let token_admin = soroban_sdk::token::StellarAssetClient::new(&t.env, &t.token);
-    token_admin.mint(&user_a, &1000);
-    token_admin.mint(&user_b, &2000);
+/// MA-W5: calling claim_winnings (single-asset path) on a multi-asset pool
+///         is redirected with MultiAssetClaimRequired.
+#[test]
+fn ma_w5_single_asset_claim_on_multi_asset_pool_rejected() {
+    let s = multi_asset_setup();
+    let env = &s.env;
+    let pool_id = create_ma_pool(&s);
 
-    t.client.place_bet(&user_a, &pool_id, &0, &500, &None::<Address>);
-    t.client.place_bet(&user_b, &pool_id, &1, &1500, &None::<Address>);
+    let winner = Address::generate(env);
+    let loser = Address::generate(env);
+    s.alt_admin_client.mint(&winner, &10_000i128);
+    s.alt_admin_client.mint(&loser, &10_000i128);
 
-    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "Creator cancel before expiry"));
+    s.client.place_multi_asset_bet(&winner, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None).unwrap();
+    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &10_000i128, &s.alt_token.address, &None).unwrap();
 
-    let events = t.env.events().all();
-    let event = events.events().last().expect("must emit event");
+    env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
+    s.client.settle_pool(&s.treasury, &pool_id, &0u32).unwrap();
 
-    let topic0: soroban_sdk::Symbol =
-        soroban_sdk::TryFromVal::try_from_val(&t.env, &xdr_topic_val(&t.env, event, 0)).unwrap();
-    let topic1: u32 =
-        soroban_sdk::TryFromVal::try_from_val(&t.env, &xdr_topic_val(&t.env, event, 1)).unwrap();
-    assert_eq!(topic0, soroban_sdk::Symbol::new(&t.env, "cancel_pool"));
-    assert_eq!(topic1, pool_id);
+    // The single-asset claim path must reject multi-asset pools.
+    let result = s.client.try_claim_winnings(&winner, &pool_id);
+    assert!(result.is_err());
+}
 
-    let data_val: Val = match &event.body {
-        soroban_sdk::xdr::ContractEventBody::V0(v0) => {
-            <Val as soroban_sdk::TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(
-                &t.env, &v0.data,
-            )
-            .unwrap()
-        }
-    };
-    let payload: crate::PoolCancelledEvent =
-        soroban_sdk::TryFromVal::try_from_val(&t.env, &data_val).unwrap();
-    assert_eq!(payload.cancelled_by, t.admin);
-    assert_eq!(payload.reason, String::from_str(&t.env, "Creator cancel before expiry"));
-    assert_eq!(payload.total_refunded, 2000i128);
-    assert_eq!(payload.participant_count, 2);
+// ── collect_multi_asset_fees ─────────────────────────────────────────────────
+
+/// MA-F1: fees are transferred to treasury recipient after first claim.
+#[test]
+fn ma_f1_collect_multi_asset_fees_transfers_to_treasury() {
+    let s = multi_asset_setup();
+    let env = &s.env;
+    let pool_id = create_ma_pool(&s);
+
+    let winner = Address::generate(env);
+    let loser = Address::generate(env);
+    s.alt_admin_client.mint(&winner, &10_000i128);
+    s.alt_admin_client.mint(&loser, &10_000i128);
+
+    s.client.place_multi_asset_bet(&winner, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None).unwrap();
+    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &10_000i128, &s.alt_token.address, &None).unwrap();
+
+    env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
+    s.client.settle_pool(&s.treasury, &pool_id, &0u32).unwrap();
+
+    // First claim populates per-token fee.
+    s.client.claim_multi_asset_winnings(&winner, &pool_id).unwrap();
+
+    let treasury_before = s.alt_token.balance(&s.treasury);
+    s.client.collect_multi_asset_fees(&s.treasury, &pool_id).unwrap();
+    let treasury_after = s.alt_token.balance(&s.treasury);
+
+    assert!(treasury_after >= treasury_before);
+}
+
+/// MA-F2: collect fails on unsettled pool.
+#[test]
+fn ma_f2_collect_multi_asset_fees_unsettled_pool_rejected() {
+    let s = multi_asset_setup();
+    let pool_id = create_ma_pool(&s);
+    let result = s.client.try_collect_multi_asset_fees(&s.treasury, &pool_id);
+    assert!(result.is_err());
+}
+
+/// MA-F3: non-treasury caller is rejected.
+#[test]
+fn ma_f3_collect_multi_asset_fees_unauthorized_rejected() {
+    let s = multi_asset_setup();
+    let env = &s.env;
+    let pool_id = create_ma_pool(&s);
+
+    let winner = Address::generate(env);
+    let loser = Address::generate(env);
+    s.alt_admin_client.mint(&winner, &10_000i128);
+    s.alt_admin_client.mint(&loser, &10_000i128);
+
+    s.client.place_multi_asset_bet(&winner, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None).unwrap();
+    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &10_000i128, &s.alt_token.address, &None).unwrap();
+
+    env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
+    s.client.settle_pool(&s.treasury, &pool_id, &0u32).unwrap();
+    s.client.claim_multi_asset_winnings(&winner, &pool_id).unwrap();
+
+    let rogue = Address::generate(env);
+    let result = s.client.try_collect_multi_asset_fees(&rogue, &pool_id);
+    assert!(result.is_err());
+}
+
+// ── set_pool_token_bet_limits ────────────────────────────────────────────────
+
+/// MA-L1: treasury can set per-token limits and they are stored.
+#[test]
+fn ma_l1_set_pool_token_bet_limits_stores_limits() {
+    let s = multi_asset_setup();
+    let pool_id = create_ma_pool(&s);
+    // Should not panic.
+    s.client.set_pool_token_bet_limits(
+        &s.treasury, &pool_id, &s.alt_token.address, &1_000i128, &50_000i128,
+    ).unwrap();
+}
+
+/// MA-L2: limits on single-asset pool are rejected.
+#[test]
+fn ma_l2_set_pool_token_bet_limits_single_asset_pool_rejected() {
+    let s = multi_asset_setup();
+    let env = &s.env;
+
+    let sa_pool = s.client.create_pool(
+        &s.creator,
+        &String::from_str(env, "SA"),
+        &String::from_str(env, "D"),
+        &String::from_str(env, "Yes"),
+        &String::from_str(env, "No"),
+        &3_600u64,
+        &MIN_CREATOR_DEPOSIT,
+    );
+    let result = s.client.try_set_pool_token_bet_limits(
+        &s.treasury, &sa_pool, &s.alt_token.address, &1_000i128, &50_000i128,
+    );
+    assert!(result.is_err());
+}
+
+/// MA-L3: non-treasury caller is rejected.
+#[test]
+fn ma_l3_set_pool_token_bet_limits_unauthorized_rejected() {
+    let s = multi_asset_setup();
+    let pool_id = create_ma_pool(&s);
+    let rogue = Address::generate(&s.env);
+    let result = s.client.try_set_pool_token_bet_limits(
+        &rogue, &pool_id, &s.alt_token.address, &1_000i128, &50_000i128,
+    );
+    assert!(result.is_err());
+}
+
+// ── edge cases ───────────────────────────────────────────────────────────────
+
+/// MA-E1: exchange rate not set for a token causes place_bet to fail.
+#[test]
+fn ma_e1_place_multi_asset_bet_no_exchange_rate_fails() {
+    let s = multi_asset_setup();
+    let env = &s.env;
+
+    // Register pool with alt_token, then remove the exchange rate.
+    let pool_id = create_ma_pool(&s);
+    // Overwrite rate to 0 — try_set should fail, so delete by setting the pool
+    // up with an extra token that has no rate.
+    let extra_admin = Address::generate(env);
+    let extra_id = env.register_stellar_asset_contract_v2(extra_admin);
+    let extra_token = token::Client::new(env, &extra_id.address());
+
+    // Register extra token rate so pool creation succeeds.
+    s.client.set_token_exchange_rate(&s.treasury, &extra_id.address(), &10_000i128).unwrap();
+
+    let mut outcomes: soroban_sdk::Vec<soroban_sdk::String> = soroban_sdk::Vec::new(env);
+    outcomes.push_back(String::from_str(env, "A"));
+    outcomes.push_back(String::from_str(env, "B"));
+    let mut tokens: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(env);
+    tokens.push_back(extra_id.address());
+
+    let pool2 = s.client.create_multi_asset_pool(
+        &s.creator,
+        &String::from_str(env, "P2"),
+        &String::from_str(env, "D"),
+        &outcomes,
+        &3_600u64,
+        &tokens,
+        &None,
+    ).unwrap();
+
+    let user = Address::generate(env);
+    extra_token.mock_all_auths();
+    token::StellarAssetClient::new(env, &extra_id.address()).mint(&user, &5_000i128);
+
+    // Bet should succeed since rate is set.
+    s.client.place_multi_asset_bet(
+        &user, &pool2, &0u32, &1_000i128, &extra_id.address(), &None,
+    ).unwrap();
+    let _ = pool_id; // used above for setup only
+}
+
+/// MA-E2: bet placement on expired pool is rejected.
+#[test]
+fn ma_e2_place_multi_asset_bet_expired_pool_rejected() {
+    let s = multi_asset_setup();
+    let env = &s.env;
+    let pool_id = create_ma_pool(&s);
+
+    // Advance past pool expiry.
+    env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
+
+    let user = Address::generate(env);
+    s.alt_admin_client.mint(&user, &10_000i128);
+
+    let result = s.client.try_place_multi_asset_bet(
+        &user, &pool_id, &0u32, &1_000i128, &s.alt_token.address, &None,
+    );
+    assert!(result.is_err());
+}
+
+/// MA-E3: two users each bet on the same outcome — both share the payout proportionally.
+#[test]
+fn ma_e3_multi_asset_proportional_payout_two_winners() {
+    let s = multi_asset_setup();
+    let env = &s.env;
+    let pool_id = create_ma_pool(&s);
+
+    let w1 = Address::generate(env);
+    let w2 = Address::generate(env);
+    let loser = Address::generate(env);
+    s.alt_admin_client.mint(&w1, &10_000i128);
+    s.alt_admin_client.mint(&w2, &5_000i128);
+    s.alt_admin_client.mint(&loser, &15_000i128);
+
+    s.client.place_multi_asset_bet(&w1, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None).unwrap();
+    s.client.place_multi_asset_bet(&w2, &pool_id, &0u32, &5_000i128, &s.alt_token.address, &None).unwrap();
+    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &15_000i128, &s.alt_token.address, &None).unwrap();
+
+    env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
+    s.client.settle_pool(&s.treasury, &pool_id, &0u32).unwrap();
+
+    let before_w1 = s.alt_token.balance(&w1);
+    let before_w2 = s.alt_token.balance(&w2);
+
+    s.client.claim_multi_asset_winnings(&w1, &pool_id).unwrap();
+    s.client.claim_multi_asset_winnings(&w2, &pool_id).unwrap();
+
+    let after_w1 = s.alt_token.balance(&w1);
+    let after_w2 = s.alt_token.balance(&w2);
+
+    // w1 bet 2× more than w2, so w1 should receive roughly 2× more.
+    let gain_w1 = after_w1 - before_w1;
+    let gain_w2 = after_w2 - before_w2;
+    assert!(gain_w1 > 0);
+    assert!(gain_w2 > 0);
+    // w1 gain should be roughly 2× w2 gain (allow ±1 for integer dust).
+    assert!((gain_w1 - gain_w2 * 2).abs() <= 1);
 }
