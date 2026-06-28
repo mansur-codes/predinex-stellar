@@ -12,7 +12,7 @@
 
 extern crate std;
 
-use predinex::{ClaimStatus, Pool, PoolStatus, PredinexContract, PredinexContractClient};
+use predinex::{ClaimStatus, Pool, PoolStatus, PredinexContract, PredinexContractClient, MIN_CREATOR_DEPOSIT};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, Env, String,
@@ -42,7 +42,7 @@ fn setup() -> Ctx<'static> {
 
     let contract_id = env.register(PredinexContract, ());
     let client = PredinexContractClient::new(&env, &contract_id);
-    client.initialize(&token_asset.address(), &treasury);
+    client.initialize(&token_asset.address(), &treasury, &treasury);
 
     let token = token::Client::new(&env, &token_asset.address());
     let token_admin = token::StellarAssetClient::new(&env, &token_asset.address());
@@ -74,6 +74,7 @@ fn make_pool(ctx: &Ctx, creator: &Address) -> u32 {
         &String::from_str(&ctx.env, "Yes"),
         &String::from_str(&ctx.env, "No"),
         &3_600u64,
+        &MIN_CREATOR_DEPOSIT,
     )
 }
 
@@ -277,6 +278,7 @@ fn mu3_dispute_blocks_claims_unfreeze_re_settles() {
         &String::from_str(&ctx.env, "Yes"),
         &String::from_str(&ctx.env, "No"),
         &3_600u64,
+        &MIN_CREATOR_DEPOSIT,
     );
 
     ctx.client

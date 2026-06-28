@@ -7,7 +7,8 @@
 extern crate alloc;
 use alloc::vec;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, token, Address, Env, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, token, Address, Env,
+    String, Symbol, Vec,
 };
 
 mod benchmark_tests;
@@ -268,7 +269,12 @@ const MAX_METADATA_URI_LENGTH: u32 = 256;
 const MAX_SCHEDULE_POOL_HORIZON_SECS: u64 = 30 * 24 * 60 * 60;
 const SCHEDULED_CLAIM_EXECUTION_CAP: u32 = 10;
 
-/// Default per-pool minimum bet: 0 (no minimum).
+/// Contract-wide minimum bet amount to prevent dust attacks.
+/// Any bet below this threshold is rejected regardless of per-pool limits.
+/// 1 XLM = 10_000_000 stroops, so 1_000_000 = 0.1 XLM.
+const MIN_BET_AMOUNT: i128 = 1_000_000;
+
+/// Default per-pool minimum bet: 0 (no minimum past the contract-wide floor).
 ///
 /// Admin/treasury can set explicit limits per pool. When absent, we
 /// intentionally avoid enforcing UI-level constraints so existing pools /
@@ -376,6 +382,8 @@ pub enum ContractError {
     TooManyOutcomes = 66,
     /// A duplicate token was provided in the allowed-token list.
     DuplicateToken = 67,
+    /// A scheduled claim is not yet due for execution.
+    ScheduledClaimNotDue = 68,
 }
 
 /// #176 — Settlement source tag indicating who initiated pool settlement.
@@ -485,6 +493,24 @@ pub struct PoolOutcome {
     pub index: u32,
     pub label: String,
     pub total: i128,
+}
+
+/// #679 — On-chain pool metadata (immutable after creation) exposed via
+/// `get_pool_info` so callers do not need to deserialise the full `Pool`.
+#[derive(Clone)]
+#[contracttype]
+pub struct PoolInfo {
+    pub name: String,
+    pub description: String,
+}
+
+/// #680 — A single entry in a pool's leaderboard.
+#[derive(Clone)]
+#[contracttype]
+pub struct PoolLeaderboardEntry {
+    pub user: Address,
+    pub total_bet: i128,
+    pub winnings_claimed: bool,
 }
 
 #[derive(Clone)]
@@ -2341,6 +2367,11 @@ impl PredinexContract {
 
         if amount <= 0 {
             return Err(ContractError::InvalidBetAmount);
+        }
+
+        // #673 — Enforce contract-wide minimum bet to prevent dust.
+        if amount < MIN_BET_AMOUNT {
+            return Err(ContractError::BetBelowMinBet);
         }
 
         let mut pool = env
@@ -4835,6 +4866,96 @@ impl PredinexContract {
         pool
     }
 
+    /// #679 — Return the immutable metadata (name, description) for a pool.
+    /// Named `get_pool_info` to avoid collision with the existing
+    /// `get_pool_metadata` (which returns the off-chain metadata URI).
+    pub fn get_pool_info(env: Env, pool_id: u32) -> Option<PoolInfo> {
+        let pool = env.storage().persistent().get::<_, Pool>(&DataKey::Pool(pool_id))?;
+        Some(PoolInfo {
+            name: pool.title,
+            description: pool.description,
+        })
+    }
+
+    /// #680 — Return the leaderboard for a pool, ordered by total bet descending.
+    ///
+    /// Supports cursor-based pagination: pass `cursor` as the last seen user address
+    /// (or `None` to start from the top). `limit` is capped at 50 entries per call.
+    ///
+    /// Each entry includes the user address, total bet amount, and whether winnings
+    /// have been claimed (for settled pools).
+    pub fn get_leaderboard(
+        env: Env,
+        pool_id: u32,
+        limit: u32,
+        cursor: Option<Address>,
+    ) -> Vec<PoolLeaderboardEntry> {
+        let effective_limit = if limit > 50 { 50 } else { limit };
+        let mut result = Vec::new(&env);
+
+        let bettors: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PoolBettors(pool_id))
+            .unwrap_or_else(|| Vec::new(&env));
+
+        for i in 0..bettors.len() {
+            let user = bettors.get(i).unwrap();
+
+            // Skip entries before cursor.
+            if let Some(ref cursor_addr) = cursor {
+                if user == cursor_addr.clone() {
+                    continue;
+                }
+            }
+
+            if let Some(bet) = env
+                .storage()
+                .persistent()
+                .get::<_, UserBet>(&DataKey::UserBet(pool_id, user.clone()))
+            {
+                let winnings_claimed = match Self::get_claim_status(env.clone(), pool_id, user.clone()) {
+                    ClaimStatus::AlreadyClaimed => true,
+                    _ => false,
+                };
+
+                result.push_back(PoolLeaderboardEntry {
+                    user,
+                    total_bet: bet.total_bet,
+                    winnings_claimed,
+                });
+            }
+        }
+
+        // Sort by total_bet descending using a simple bubble sort (Vec has no sort).
+        let n = result.len();
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let a = result.get(i).unwrap().total_bet;
+                let b = result.get(j).unwrap().total_bet;
+                if b > a {
+                    let entry_i = result.get(i).unwrap();
+                    let entry_j = result.get(j).unwrap();
+                    let tmp = entry_i.clone();
+                    result.set(i, entry_j.clone());
+                    result.set(j, tmp);
+                }
+            }
+        }
+
+        // Apply limit.
+        let mut limited = Vec::new(&env);
+        let count = if effective_limit < result.len() {
+            effective_limit
+        } else {
+            result.len()
+        };
+        for i in 0..count {
+            limited.push_back(result.get(i).unwrap());
+        }
+        limited
+    }
+
     /// #635 — Return the template ID used to create this pool, if any.
     ///
     /// Returns `Some(template_id)` when the pool was created via
@@ -6158,6 +6279,11 @@ impl PredinexContract {
             return Err(ContractError::InvalidBetAmount);
         }
 
+        // #673 — Enforce contract-wide minimum bet to prevent dust.
+        if amount < MIN_BET_AMOUNT {
+            return Err(ContractError::BetBelowMinBet);
+        }
+
         // Validate referrer is not the user themselves.
         if let Some(ref ref_addr) = referrer {
             if ref_addr == &user {
@@ -6357,7 +6483,7 @@ impl PredinexContract {
             .ok_or(ContractError::PoolTotalOverflow)?;
 
         // Load user_bet early to check for first-time bet.
-        let mut user_bet: UserBet = env
+        let _user_bet: UserBet = env
             .storage()
             .persistent()
             .get(&DataKey::UserBet(pool_id, user.clone()))

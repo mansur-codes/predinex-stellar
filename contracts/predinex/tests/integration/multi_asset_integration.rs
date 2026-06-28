@@ -45,7 +45,7 @@ fn setup_ma() -> MaCtx<'static> {
 
     let contract_id = env.register(PredinexContract, ());
     let client = PredinexContractClient::new(&env, &contract_id);
-    client.initialize(&base_asset.address(), &treasury);
+    client.initialize(&base_asset.address(), &treasury, &treasury);
 
     let base_admin = token::StellarAssetClient::new(&env, &base_asset.address());
     let alt_admin = token::StellarAssetClient::new(&env, &alt_asset.address());
