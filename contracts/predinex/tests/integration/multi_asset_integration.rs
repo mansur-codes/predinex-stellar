@@ -44,22 +44,15 @@ fn setup_ma() -> MaCtx<'static> {
     let alt_asset = env.register_stellar_asset_contract_v2(treasury.clone());
 
     let contract_id = env.register(PredinexContract, ());
-    let client = PredinexContractClient::new(&env, &contract_id);
+    let client: PredinexContractClient<'static> = PredinexContractClient::new(&env, &contract_id);
     client.initialize(&base_asset.address(), &treasury);
 
-    let base_admin = token::StellarAssetClient::new(&env, &base_asset.address());
-    let alt_admin = token::StellarAssetClient::new(&env, &alt_asset.address());
-    let base_client = token::Client::new(&env, &base_asset.address());
-    let alt_client = token::Client::new(&env, &alt_asset.address());
-
-    // Transmute to 'static — safe because Env owns all allocations.
-    let client: PredinexContractClient<'static> = unsafe { core::mem::transmute(client) };
     let base_admin: token::StellarAssetClient<'static> =
-        unsafe { core::mem::transmute(base_admin) };
-    let alt_admin: token::StellarAssetClient<'static> = unsafe { core::mem::transmute(alt_admin) };
-    let base_client: token::Client<'static> = unsafe { core::mem::transmute(base_client) };
-    let alt_client: token::Client<'static> = unsafe { core::mem::transmute(alt_client) };
-    let env: Env = unsafe { core::mem::transmute(env) };
+        token::StellarAssetClient::new(&env, &base_asset.address());
+    let alt_admin: token::StellarAssetClient<'static> =
+        token::StellarAssetClient::new(&env, &alt_asset.address());
+    let base_client: token::Client<'static> = token::Client::new(&env, &base_asset.address());
+    let alt_client: token::Client<'static> = token::Client::new(&env, &alt_asset.address());
 
     MaCtx {
         env,

@@ -41,18 +41,13 @@ fn setup() -> Ctx<'static> {
     let token_asset = env.register_stellar_asset_contract_v2(treasury.clone());
 
     let contract_id = env.register(PredinexContract, ());
-    let client = PredinexContractClient::new(&env, &contract_id);
+    let client: PredinexContractClient<'static> = PredinexContractClient::new(&env, &contract_id);
     client.initialize(&token_asset.address(), &treasury);
 
-    let token = token::Client::new(&env, &token_asset.address());
-    let token_admin = token::StellarAssetClient::new(&env, &token_asset.address());
-
-    // Transmute to 'static — safe because Env owns all allocations and outlives Ctx.
-    let client: PredinexContractClient<'static> = unsafe { core::mem::transmute(client) };
-    let token: token::Client<'static> = unsafe { core::mem::transmute(token) };
+    let token: token::Client<'static> = token::Client::new(&env, &token_asset.address());
     let token_admin: token::StellarAssetClient<'static> =
-        unsafe { core::mem::transmute(token_admin) };
-    let env: Env = unsafe { core::mem::transmute(env) };
+        token::StellarAssetClient::new(&env, &token_asset.address());
+
     let contract_addr = contract_id;
 
     Ctx {

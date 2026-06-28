@@ -65,7 +65,7 @@ impl Ctx {
         let contract_id = env.register(PredinexContract, ());
         // SAFETY: lifetime extension matches the pattern used across this repo.
         let client: PredinexContractClient<'static> =
-            unsafe { core::mem::transmute(PredinexContractClient::new(&env, &contract_id)) };
+            PredinexContractClient::new(&env, &contract_id);
 
         // initialize() stores the second argument as TreasuryRecipient.
         let token_admin = Address::generate(&env);

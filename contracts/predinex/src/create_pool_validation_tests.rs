@@ -10,8 +10,7 @@ fn setup() -> (Env, PredinexContractClient<'static>) {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(PredinexContract, ());
-    let client = PredinexContractClient::new(&env, &contract_id);
-    let client: PredinexContractClient<'static> = unsafe { core::mem::transmute(client) };
+    let client: PredinexContractClient<'static> = PredinexContractClient::new(&env, &contract_id);
     (env, client)
 }
 
