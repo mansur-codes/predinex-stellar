@@ -15,7 +15,19 @@ export const MAX_TITLE_LENGTH = 100;
 export const MAX_DESCRIPTION_LENGTH = 1000;
 export const MAX_OUTCOME_LENGTH = 50;
 export const MIN_POOL_DURATION_SECS = 300;
+export const MAX_DEPOSIT_AMOUNT = 1_000_000;
+export const MIN_DEPOSIT_AMOUNT = 0.1;
 export { MAX_POOL_DURATION_SECS };
+
+/**
+ * Supported asset identifier set for the pool creation form.
+ *
+ * The current Stellar (Soroban) contract only accepts the native asset (`XLM`)
+ * but the UI is built to forward additional asset identifiers as metadata in
+ * case the contract gains a multi-asset path in the future.
+ */
+export const SUPPORTED_POOL_ASSETS = ['XLM', 'USDC', 'BTC', 'ETH'] as const;
+export type SupportedPoolAsset = (typeof SUPPORTED_POOL_ASSETS)[number];
 
 /**
  * Validate a Stacks contract identifier in `<address>.<name>` form.
@@ -214,6 +226,94 @@ export function validateWithdrawalAmount(
     return { valid: false, error: 'Insufficient balance' };
   }
   return { valid: true };
+}
+
+/**
+ * Validate a pool-creation asset identifier.
+ *
+ * @param asset Asset symbol input from the pool form
+ * @returns Validation result
+ */
+export function validateAssetType(
+  asset: string
+): { valid: boolean; error?: string } {
+  if (!asset || asset.trim().length === 0) {
+    return { valid: false, error: 'Asset type is required' };
+  }
+  const normalised = asset.trim().toUpperCase();
+  if (!SUPPORTED_POOL_ASSETS.includes(normalised as SupportedPoolAsset)) {
+    return {
+      valid: false,
+      error: `Unsupported asset '${asset}'. Choose one of: ${SUPPORTED_POOL_ASSETS.join(', ')}.`,
+    };
+  }
+  return { valid: true };
+}
+
+/**
+ * Validate a pool deposit / minimum bet amount.
+ *
+ * @param amount Deposit amount in the chosen asset
+ * @returns Validation result
+ */
+export function validateDepositAmount(
+  amount: number
+): { valid: boolean; error?: string } {
+  if (amount === undefined || amount === null || Number.isNaN(amount)) {
+    return { valid: false, error: 'Deposit amount is required' };
+  }
+  if (amount <= 0) {
+    return { valid: false, error: 'Deposit amount must be greater than 0' };
+  }
+  if (amount < MIN_DEPOSIT_AMOUNT) {
+    return {
+      valid: false,
+      error: `Deposit amount must be at least ${MIN_DEPOSIT_AMOUNT}`,
+    };
+  }
+  if (amount > MAX_DEPOSIT_AMOUNT) {
+    return {
+      valid: false,
+      error: `Deposit amount must be ${MAX_DEPOSIT_AMOUNT.toLocaleString()} or less`,
+    };
+  }
+  return { valid: true };
+}
+
+/**
+ * Validate the full pool creation form (v2 — pool-centric fields).
+ *
+ * @param data Form data
+ * @returns Validation result with aggregated errors
+ */
+export function validatePoolForm(data: {
+  name: string;
+  description: string;
+  asset: string;
+  depositAmount: number;
+  expirySeconds: number;
+}): { valid: boolean; errors: Record<string, string> } {
+  const errors: Record<string, string> = {};
+
+  const titleValidation = validatePoolTitle(data.name);
+  if (!titleValidation.valid) errors.name = titleValidation.error!;
+
+  const descriptionValidation = validatePoolDescription(data.description);
+  if (!descriptionValidation.valid) errors.description = descriptionValidation.error!;
+
+  const assetValidation = validateAssetType(data.asset);
+  if (!assetValidation.valid) errors.asset = assetValidation.error!;
+
+  const depositValidation = validateDepositAmount(data.depositAmount);
+  if (!depositValidation.valid) errors.depositAmount = depositValidation.error!;
+
+  const expiryValidation = validateDuration(data.expirySeconds);
+  if (!expiryValidation.valid) errors.expirySeconds = expiryValidation.error!;
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors,
+  };
 }
 
 /**

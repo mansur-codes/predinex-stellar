@@ -51,6 +51,9 @@ export default function Navbar() {
                             <Link href="/create" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors" aria-label="Create a new prediction market">
                                 {t('nav.create')}
                             </Link>
+                            <Link href="/pools/new" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors" aria-label="Create a new pool">
+                                Create pool
+                            </Link>
                             {isConnected && (
                                 <Link href="/transactions" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors" aria-label="View transaction history">
                                     {t('nav.transactions')}
@@ -190,6 +193,17 @@ export default function Navbar() {
                                 onClick={closeMenu}
                             >
                                 {t('nav.create')}
+                            </Link>
+                            <Link
+                                href="/pools/new"
+                                className={`block px-3 py-2 text-base font-medium rounded-lg transition-colors ${
+                                    isActive('/pools/new')
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-muted-foreground hover:text-primary hover:bg-muted/50'
+                                }`}
+                                onClick={closeMenu}
+                            >
+                                Create pool
                             </Link>
                             {isConnected && (
                                 <Link
