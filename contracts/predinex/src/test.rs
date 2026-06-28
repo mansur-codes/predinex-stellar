@@ -2976,7 +2976,7 @@ fn claim_status_loser_is_not_eligible_not_never_bet() {
 
 /// Cancelled pool: RefundClaimable → AlreadyClaimed after claim_refund.
 #[test]
-fn claim_status_cancelled_pool_transitions() {
+fn claim_status_voided_pool_transitions() {
     let t = setup();
     let pool_id = make_pool(&t);
 
@@ -2986,7 +2986,7 @@ fn claim_status_cancelled_pool_transitions() {
 
     t.client
         .place_bet(&user, &pool_id, &0, &200, &None::<Address>);
-    t.client.cancel_pool(&t.admin, &pool_id);
+    t.client.void_pool(&t.admin, &pool_id);
 
     assert_eq!(
         t.client.get_claim_status(&pool_id, &user),
@@ -3076,7 +3076,7 @@ fn i1_cancel_pool_before_bets_succeeds() {
     let pool_before = t.client.get_pool(&pool_id).expect("pool must exist");
     assert_eq!(pool_before.status, PoolStatus::Open);
 
-    t.client.cancel_pool(&t.admin, &pool_id);
+    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "No bets placed yet"));
 
     let pool_after = t
         .client
@@ -3095,15 +3095,31 @@ fn i2_cancel_pool_after_first_bet_succeeds() {
     let t = setup();
     let pool_id = make_pool(&t);
 
+    let token_client = soroban_sdk::token::Client::new(&t.env, &t.token);
+    let bal_before = token_client.balance(&t.user);
+    assert_eq!(bal_before, 10_000i128);
+
     t.client
         .place_bet(&t.user, &pool_id, &0u32, &100i128, &None::<Address>);
-    t.client.cancel_pool(&t.admin, &pool_id);
+    
+    let bal_after_bet = token_client.balance(&t.user);
+    assert_eq!(bal_after_bet, 9_900i128);
+
+    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "Creator decided to cancel"));
 
     let pool_after = t
         .client
         .get_pool(&pool_id)
         .expect("pool must still exist after cancel");
     assert_eq!(pool_after.status, PoolStatus::Cancelled);
+
+    // Verify participant bet record is removed
+    let bet = t.client.get_user_bet(&pool_id, &t.user);
+    assert!(bet.is_none(), "bet record must be deleted after cancel_pool");
+
+    // Verify participant is refunded immediately
+    let bal_after_cancel = token_client.balance(&t.user);
+    assert_eq!(bal_after_cancel, 10_000i128, "user balance must be fully refunded");
 }
 
 /// I3: A non-creator cannot cancel the pool.
@@ -3114,7 +3130,7 @@ fn i3_non_creator_cannot_cancel_pool() {
     let pool_id = make_pool(&t);
 
     let other = Address::generate(&t.env);
-    t.client.cancel_pool(&other, &pool_id);
+    t.client.cancel_pool(&other, &pool_id, &String::from_str(&t.env, "attempt"));
 }
 
 /// I4: Pool records survive cancellation; storage is not silently deleted.
@@ -3123,7 +3139,7 @@ fn i4_cancelled_pool_record_is_retained() {
     let t = setup();
     let pool_id = make_pool(&t);
 
-    t.client.cancel_pool(&t.admin, &pool_id);
+    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "retained"));
 
     let pool = t.client.get_pool(&pool_id);
     assert!(
@@ -3140,7 +3156,7 @@ fn i5_place_bet_on_cancelled_pool_rejected() {
     let t = setup();
     let pool_id = make_pool(&t);
 
-    t.client.cancel_pool(&t.admin, &pool_id);
+    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "rejected"));
     t.client
         .place_bet(&t.user, &pool_id, &0u32, &100i128, &None::<Address>);
 }
@@ -3152,7 +3168,7 @@ fn i6_settle_cancelled_pool_rejected() {
     let t = setup();
     let pool_id = make_pool(&t);
 
-    t.client.cancel_pool(&t.admin, &pool_id);
+    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "rejected"));
     expire_pool(&t.env);
     t.client.settle_pool(&t.admin, &pool_id, &0u32);
 }
@@ -4011,7 +4027,7 @@ fn test_pause_blocks_claim_refund() {
     let pool_id = make_pool(&t);
     t.client
         .place_bet(&t.user, &pool_id, &0, &100, &None::<Address>);
-    t.client.cancel_pool(&t.admin, &pool_id);
+    t.client.void_pool(&t.admin, &pool_id);
 
     t.client.set_paused(&t.admin, &true);
 
