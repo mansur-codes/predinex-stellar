@@ -53,11 +53,9 @@ fn setup_bm() -> BmEnv<'static> {
     let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
 
     let contract_id = env.register(PredinexContract, ());
-    let client = PredinexContractClient::new(&env, &contract_id);
+    let client: PredinexContractClient<'static> = PredinexContractClient::new(&env, &contract_id);
 
     client.initialize(&token_id.address(), &token_admin, &token_admin);
-
-    let client: PredinexContractClient<'static> = unsafe { core::mem::transmute(client) };
 
     BmEnv {
         env,

@@ -34,18 +34,12 @@ fn setup() -> Ctx<'static> {
     let token_asset = env.register_stellar_asset_contract_v2(token_admin_addr.clone());
 
     let contract_id = env.register(PredinexContract, ());
-    let client = PredinexContractClient::new(&env, &contract_id);
+    let client: PredinexContractClient<'static> = PredinexContractClient::new(&env, &contract_id);
     client.initialize(&token_asset.address(), &treasury, &treasury);
 
-    let token = token::Client::new(&env, &token_asset.address());
-    let token_admin = token::StellarAssetClient::new(&env, &token_asset.address());
-
-    // Leak lifetimes — safe because env owns all allocations and outlives Ctx.
-    let client: PredinexContractClient<'static> = unsafe { core::mem::transmute(client) };
-    let token: token::Client<'static> = unsafe { core::mem::transmute(token) };
+    let token: token::Client<'static> = token::Client::new(&env, &token_asset.address());
     let token_admin: token::StellarAssetClient<'static> =
-        unsafe { core::mem::transmute(token_admin) };
-    let env: Env = unsafe { core::mem::transmute(env) };
+        token::StellarAssetClient::new(&env, &token_asset.address());
 
     Ctx {
         env,
@@ -127,8 +121,7 @@ fn l3_losing_bettor_cannot_claim() {
         .place_bet(&loser, &pool_id, &1, &200, &None::<Address>);
 
     expire(&ctx);
-    ctx.client
-        .settle_pool(&ctx.treasury, &pool_id, &0); // A wins
+    ctx.client.settle_pool(&ctx.treasury, &pool_id, &0); // A wins
 
     ctx.client.claim_winnings(&loser, &pool_id);
 }
@@ -155,8 +148,7 @@ fn l4_two_winners_proportional_payout() {
         .place_bet(&loser, &pool_id, &1, &200, &None::<Address>); // 200 on B
 
     expire(&ctx);
-    ctx.client
-        .settle_pool(&ctx.treasury, &pool_id, &0); // A wins
+    ctx.client.settle_pool(&ctx.treasury, &pool_id, &0); // A wins
 
     // Total pool = 600. Fee 2% = 12. Net = 588. Winners total = 400.
     // w1 share = 300 * 588 / 400 = 441
@@ -217,8 +209,7 @@ fn e3_settle_before_expiry_rejected() {
 
     let pool_id = make_pool(&ctx, &creator);
     // Timestamp is still 0, pool expires at 3600
-    ctx.client
-        .settle_pool(&ctx.treasury, &pool_id, &0);
+    ctx.client.settle_pool(&ctx.treasury, &pool_id, &0);
 }
 
 /// E4: Minimum position — single token bet, single token LP deposit.
@@ -248,8 +239,7 @@ fn e5_maximum_positions_both_sides() {
         .place_bet(&side_b, &pool_id, &1, &big_amount, &None::<Address>);
 
     expire(&ctx);
-    ctx.client
-        .settle_pool(&ctx.treasury, &pool_id, &1); // B wins
+    ctx.client.settle_pool(&ctx.treasury, &pool_id, &1); // B wins
 
     // side_b is the sole winner: gets net pool = 2_000_000_000 - 2% = 1_960_000_000
     let winnings = ctx.client.claim_winnings(&side_b, &pool_id);
@@ -295,8 +285,7 @@ fn e9_dispute_after_window_rejected() {
         .place_bet(&user, &pool_id, &0, &100, &None::<Address>);
 
     expire(&ctx);
-    ctx.client
-        .settle_pool(&ctx.treasury, &pool_id, &0);
+    ctx.client.settle_pool(&ctx.treasury, &pool_id, &0);
 
     // Advance ledger past dispute window (7 days + 1 second)
     ctx.env.ledger().with_mut(|l| {

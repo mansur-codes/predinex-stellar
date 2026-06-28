@@ -24,7 +24,11 @@ fn test_create_pool() {
 
     let contract_id = env.register(PredinexContract, ());
     let client = PredinexContractClient::new(&env, &contract_id);
-    client.initialize(&Address::generate(&env), &Address::generate(&env), &Address::generate(&env));
+    client.initialize(
+        &Address::generate(&env),
+        &Address::generate(&env),
+        &Address::generate(&env),
+    );
 
     let creator = Address::generate(&env);
     let title = String::from_str(&env, "Market 1");
@@ -77,7 +81,11 @@ fn test_create_pool_accepts_duration_just_below_maximum() {
 
     let contract_id = env.register(PredinexContract, ());
     let client = PredinexContractClient::new(&env, &contract_id);
-    client.initialize(&Address::generate(&env), &Address::generate(&env), &Address::generate(&env));
+    client.initialize(
+        &Address::generate(&env),
+        &Address::generate(&env),
+        &Address::generate(&env),
+    );
 
     env.ledger().with_mut(|li| li.timestamp = 42);
 
@@ -269,7 +277,7 @@ fn test_fee_config_is_applied_to_bets_and_transferred_to_recipient() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.set_fee_config(&token_admin, &200u32, &fee_recipient);
@@ -859,16 +867,13 @@ fn setup() -> TestEnv<'static> {
         .address();
 
     let contract_id = env.register(PredinexContract, ());
-    let client = PredinexContractClient::new(&env, &contract_id);
+    let client: PredinexContractClient<'static> = PredinexContractClient::new(&env, &contract_id);
 
     client.initialize(&token, &admin, &admin);
 
     // Fund the user so token transfers in place_bet don't fail for balance reasons
     let token_admin = soroban_sdk::token::StellarAssetClient::new(&env, &token);
     token_admin.mint(&user, &10_000i128);
-
-    // Leak env lifetime — acceptable in tests where we own everything
-    let client: PredinexContractClient<'static> = unsafe { core::mem::transmute(client) };
 
     TestEnv {
         env,
@@ -2766,16 +2771,14 @@ fn min_participants_setup() -> (
     env.mock_all_auths();
 
     let contract_id = env.register(PredinexContract, ());
-    let client = PredinexContractClient::new(&env, &contract_id);
+    let client: PredinexContractClient<'static> = PredinexContractClient::new(&env, &contract_id);
 
     let token_admin = Address::generate(&env);
     let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
-    let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
+    let token_admin_client: token::StellarAssetClient<'static> =
+        token::StellarAssetClient::new(&env, &token_id.address());
     client.initialize(&token_id.address(), &token_admin, &token_admin);
 
-    let client: PredinexContractClient<'static> = unsafe { core::mem::transmute(client) };
-    let token_admin_client: token::StellarAssetClient<'static> =
-        unsafe { core::mem::transmute(token_admin_client) };
     (env, client, token_admin, token_admin_client)
 }
 
@@ -3077,7 +3080,11 @@ fn i1_cancel_pool_before_bets_succeeds() {
     let pool_before = t.client.get_pool(&pool_id).expect("pool must exist");
     assert_eq!(pool_before.status, PoolStatus::Open);
 
-    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "No bets placed yet"));
+    t.client.cancel_pool(
+        &t.admin,
+        &pool_id,
+        &String::from_str(&t.env, "No bets placed yet"),
+    );
 
     let pool_after = t
         .client
@@ -3102,11 +3109,15 @@ fn i2_cancel_pool_after_first_bet_succeeds() {
 
     t.client
         .place_bet(&t.user, &pool_id, &0u32, &100i128, &None::<Address>);
-    
+
     let bal_after_bet = token_client.balance(&t.user);
     assert_eq!(bal_after_bet, 9_900i128);
 
-    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "Creator decided to cancel"));
+    t.client.cancel_pool(
+        &t.admin,
+        &pool_id,
+        &String::from_str(&t.env, "Creator decided to cancel"),
+    );
 
     let pool_after = t
         .client
@@ -3116,11 +3127,17 @@ fn i2_cancel_pool_after_first_bet_succeeds() {
 
     // Verify participant bet record is removed
     let bet = t.client.get_user_bet(&pool_id, &t.user);
-    assert!(bet.is_none(), "bet record must be deleted after cancel_pool");
+    assert!(
+        bet.is_none(),
+        "bet record must be deleted after cancel_pool"
+    );
 
     // Verify participant is refunded immediately
     let bal_after_cancel = token_client.balance(&t.user);
-    assert_eq!(bal_after_cancel, 10_000i128, "user balance must be fully refunded");
+    assert_eq!(
+        bal_after_cancel, 10_000i128,
+        "user balance must be fully refunded"
+    );
 }
 
 /// I3: A non-creator cannot cancel the pool.
@@ -3131,7 +3148,8 @@ fn i3_non_creator_cannot_cancel_pool() {
     let pool_id = make_pool(&t);
 
     let other = Address::generate(&t.env);
-    t.client.cancel_pool(&other, &pool_id, &String::from_str(&t.env, "attempt"));
+    t.client
+        .cancel_pool(&other, &pool_id, &String::from_str(&t.env, "attempt"));
 }
 
 /// I4: Pool records survive cancellation; storage is not silently deleted.
@@ -3140,7 +3158,8 @@ fn i4_cancelled_pool_record_is_retained() {
     let t = setup();
     let pool_id = make_pool(&t);
 
-    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "retained"));
+    t.client
+        .cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "retained"));
 
     let pool = t.client.get_pool(&pool_id);
     assert!(
@@ -3157,7 +3176,8 @@ fn i5_place_bet_on_cancelled_pool_rejected() {
     let t = setup();
     let pool_id = make_pool(&t);
 
-    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "rejected"));
+    t.client
+        .cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "rejected"));
     t.client
         .place_bet(&t.user, &pool_id, &0u32, &100i128, &None::<Address>);
 }
@@ -3169,7 +3189,8 @@ fn i6_settle_cancelled_pool_rejected() {
     let t = setup();
     let pool_id = make_pool(&t);
 
-    t.client.cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "rejected"));
+    t.client
+        .cancel_pool(&t.admin, &pool_id, &String::from_str(&t.env, "rejected"));
     expire_pool(&t.env);
     t.client.settle_pool(&t.admin, &pool_id, &0u32);
 }
@@ -4403,7 +4424,11 @@ fn test_list_pools_empty_returns_empty() {
     env.mock_all_auths();
     let contract_id = env.register(PredinexContract, ());
     let client = PredinexContractClient::new(&env, &contract_id);
-    client.initialize(&Address::generate(&env), &Address::generate(&env), &Address::generate(&env));
+    client.initialize(
+        &Address::generate(&env),
+        &Address::generate(&env),
+        &Address::generate(&env),
+    );
     let result = client.list_pools(&1, &20);
     assert_eq!(result.len(), 0, "no pools created must return empty vec");
 }
@@ -4809,7 +4834,7 @@ fn m1_create_pool_emits_pool_created_event() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
 
     let events = env.events().all();
@@ -4872,7 +4897,7 @@ fn m2_place_bet_emits_bet_placed_event() {
         &String::from_str(&env, "A"),
         &String::from_str(&env, "B"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user, &pool_id, &0, &500, &None::<Address>);
@@ -4944,7 +4969,7 @@ fn m3_settle_pool_emits_settle_pool_event() {
         &String::from_str(&env, "A"),
         &String::from_str(&env, "B"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user, &pool_id, &0, &500, &None::<Address>);
@@ -5018,7 +5043,7 @@ fn m4_claim_winnings_emits_claim_event() {
         &String::from_str(&env, "A"),
         &String::from_str(&env, "B"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user, &pool_id, &0, &500, &None::<Address>);
@@ -5094,7 +5119,7 @@ fn m5_cancel_bet_emits_bet_cancelled_event() {
         &String::from_str(&env, "A"),
         &String::from_str(&env, "B"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user, &pool_id, &0, &500, &None::<Address>);
@@ -5166,7 +5191,7 @@ fn m6_extend_pool_duration_emits_pool_duration_extended_event() {
         &String::from_str(&env, "A"),
         &String::from_str(&env, "B"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
 
     // current expiry = 100 + 3600 = 3700; extend by 1800 → new expiry = 5500
@@ -5238,7 +5263,7 @@ fn m7_place_bet_with_referrer_emits_referral_bet_event() {
         &String::from_str(&env, "A"),
         &String::from_str(&env, "B"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
 
     client.place_bet(&user, &pool_id, &0, &500, &Some(referrer.clone()));
@@ -5312,7 +5337,7 @@ fn m8_claim_referral_rewards_emits_referral_reward_claimed_event() {
         &String::from_str(&env, "A"),
         &String::from_str(&env, "B"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
 
     // 1% of 500 = 5 tokens credited to referrer
@@ -5386,7 +5411,7 @@ fn m9_update_twap_emits_twap_updated_event() {
         &String::from_str(&env, "A"),
         &String::from_str(&env, "B"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
 
     // 400 on A, 100 on B → odds[0]=8000, odds[1]=2000
@@ -5447,7 +5472,7 @@ fn test_create_pool_not_initialized() {
         &String::from_str(&env, "A"),
         &String::from_str(&env, "B"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
 }
 
@@ -5543,7 +5568,7 @@ fn n1_get_total_user_claims_tracks_cumulative_winnings() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
     let opponent = Address::generate(&env);
     token_admin_client.mint(&opponent, &1000);
@@ -5558,7 +5583,7 @@ fn n1_get_total_user_claims_tracks_cumulative_winnings() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
     let opponent2 = Address::generate(&env);
     token_admin_client.mint(&opponent2, &1000);
@@ -5633,7 +5658,7 @@ fn n3_get_user_claim_history_returns_correct_entries() {
         &String::from_str(&env, "Yes"),
         &String::from_str(&env, "No"),
         &3600,
-    &MIN_CREATOR_DEPOSIT
+        &MIN_CREATOR_DEPOSIT,
     );
     let opponent = Address::generate(&env);
     token_admin_client.mint(&opponent, &1000);
@@ -5688,7 +5713,7 @@ fn n4_get_user_claim_history_pagination() {
             &String::from_str(&env, "Yes"),
             &String::from_str(&env, "No"),
             &3600,
-        &MIN_CREATOR_DEPOSIT
+            &MIN_CREATOR_DEPOSIT,
         );
 
         client.place_bet(&user, &pool_id, &0, &500, &None::<Address>);
@@ -5765,10 +5790,7 @@ fn multi_asset_setup() -> MultiAssetSetup {
     let alt_admin_client = token::StellarAssetClient::new(&env, &alt_id.address());
 
     let contract_id = env.register(PredinexContract, ());
-    // SAFETY: we extend the lifetime to 'static because the Env lives in the
-    // returned struct and is never outlived in these tests.
-    let client: PredinexContractClient<'static> =
-        unsafe { core::mem::transmute(PredinexContractClient::new(&env, &contract_id)) };
+    let client: PredinexContractClient<'static> = PredinexContractClient::new(&env, &contract_id);
 
     let treasury = Address::generate(&env);
     client.initialize(&proto_id.address(), &treasury, &treasury);
@@ -5831,7 +5853,9 @@ fn ma_c2_create_multi_asset_pool_rejects_token_without_exchange_rate() {
     // Register a brand-new token with no exchange rate.
     let unknown_admin = Address::generate(env);
     let unknown_id = env.register_stellar_asset_contract_v2(unknown_admin);
-    let unknown_addr = token::Client::new(env, &unknown_id.address()).address.clone();
+    let unknown_addr = token::Client::new(env, &unknown_id.address())
+        .address
+        .clone();
 
     let mut outcomes: soroban_sdk::Vec<soroban_sdk::String> = soroban_sdk::Vec::new(env);
     outcomes.push_back(String::from_str(env, "Yes"));
@@ -5881,7 +5905,10 @@ fn ma_c3_create_multi_asset_pool_rejects_empty_token_list() {
 #[test]
 fn ma_r1_set_token_exchange_rate_stores_value() {
     let s = multi_asset_setup();
-    let rate = s.client.get_token_exchange_rate(&s.alt_token.address).unwrap();
+    let rate = s
+        .client
+        .get_token_exchange_rate(&s.alt_token.address)
+        .unwrap();
     assert_eq!(rate, 5_000i128);
 }
 
@@ -5890,7 +5917,9 @@ fn ma_r1_set_token_exchange_rate_stores_value() {
 fn ma_r2_set_token_exchange_rate_unauthorized_rejected() {
     let s = multi_asset_setup();
     let rogue = Address::generate(&s.env);
-    let result = s.client.try_set_token_exchange_rate(&rogue, &s.alt_token.address, &10_000i128);
+    let result = s
+        .client
+        .try_set_token_exchange_rate(&rogue, &s.alt_token.address, &10_000i128);
     assert!(result.is_err());
 }
 
@@ -5898,7 +5927,9 @@ fn ma_r2_set_token_exchange_rate_unauthorized_rejected() {
 #[test]
 fn ma_r3_set_token_exchange_rate_zero_rejected() {
     let s = multi_asset_setup();
-    let result = s.client.try_set_token_exchange_rate(&s.treasury, &s.alt_token.address, &0i128);
+    let result = s
+        .client
+        .try_set_token_exchange_rate(&s.treasury, &s.alt_token.address, &0i128);
     assert!(result.is_err());
 }
 
@@ -5931,7 +5962,14 @@ fn ma_b1_place_multi_asset_bet_transfers_tokens_to_contract() {
     let user = Address::generate(&s.env);
     s.alt_admin_client.mint(&user, &20_000i128);
 
-    s.client.place_multi_asset_bet(&user, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None);
+    s.client.place_multi_asset_bet(
+        &user,
+        &pool_id,
+        &0u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
 
     // Contract holds the tokens.
     let contract_bal = s.alt_token.balance(&s.client.address);
@@ -5947,7 +5985,12 @@ fn ma_b2_place_multi_asset_bet_unsupported_token_rejected() {
 
     // proto_token is not in allowed_tokens for this pool.
     let result = s.client.try_place_multi_asset_bet(
-        &user, &pool_id, &0u32, &10_000i128, &s.proto_token.address, &None,
+        &user,
+        &pool_id,
+        &0u32,
+        &10_000i128,
+        &s.proto_token.address,
+        &None,
     );
     assert!(result.is_err());
 }
@@ -5960,7 +6003,12 @@ fn ma_b3_place_multi_asset_bet_zero_amount_rejected() {
     let user = Address::generate(&s.env);
 
     let result = s.client.try_place_multi_asset_bet(
-        &user, &pool_id, &0u32, &0i128, &s.alt_token.address, &None,
+        &user,
+        &pool_id,
+        &0u32,
+        &0i128,
+        &s.alt_token.address,
+        &None,
     );
     assert!(result.is_err());
 }
@@ -5983,7 +6031,12 @@ fn ma_b4_place_multi_asset_bet_on_single_asset_pool_rejected() {
     );
     let user = Address::generate(env);
     let result = s.client.try_place_multi_asset_bet(
-        &user, &pool_id, &0u32, &1_000i128, &s.alt_token.address, &None,
+        &user,
+        &pool_id,
+        &0u32,
+        &1_000i128,
+        &s.alt_token.address,
+        &None,
     );
     assert!(result.is_err());
 }
@@ -5997,7 +6050,12 @@ fn ma_b5_place_multi_asset_bet_self_referral_rejected() {
     s.alt_admin_client.mint(&user, &20_000i128);
 
     let result = s.client.try_place_multi_asset_bet(
-        &user, &pool_id, &0u32, &1_000i128, &s.alt_token.address, &Some(user.clone()),
+        &user,
+        &pool_id,
+        &0u32,
+        &1_000i128,
+        &s.alt_token.address,
+        &Some(user.clone()),
     );
     assert!(result.is_err());
 }
@@ -6018,8 +6076,22 @@ fn ma_w1_claim_multi_asset_winnings_happy_path() {
     s.alt_admin_client.mint(&loser, &10_000i128);
 
     // winner bets on outcome 0, loser on outcome 1.
-    s.client.place_multi_asset_bet(&winner, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None);
-    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &10_000i128, &s.alt_token.address, &None);
+    s.client.place_multi_asset_bet(
+        &winner,
+        &pool_id,
+        &0u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
+    s.client.place_multi_asset_bet(
+        &loser,
+        &pool_id,
+        &1u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
 
     // Advance past expiry and settle.
     env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
@@ -6046,8 +6118,22 @@ fn ma_w2_claim_multi_asset_winnings_loser_gets_nothing() {
     s.alt_admin_client.mint(&winner, &10_000i128);
     s.alt_admin_client.mint(&loser, &10_000i128);
 
-    s.client.place_multi_asset_bet(&winner, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None);
-    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &10_000i128, &s.alt_token.address, &None);
+    s.client.place_multi_asset_bet(
+        &winner,
+        &pool_id,
+        &0u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
+    s.client.place_multi_asset_bet(
+        &loser,
+        &pool_id,
+        &1u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
 
     env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
     s.client.settle_pool(&s.treasury, &pool_id, &0u32);
@@ -6069,8 +6155,22 @@ fn ma_w3_claim_multi_asset_winnings_double_claim_rejected() {
     s.alt_admin_client.mint(&winner, &10_000i128);
     s.alt_admin_client.mint(&loser, &10_000i128);
 
-    s.client.place_multi_asset_bet(&winner, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None);
-    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &10_000i128, &s.alt_token.address, &None);
+    s.client.place_multi_asset_bet(
+        &winner,
+        &pool_id,
+        &0u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
+    s.client.place_multi_asset_bet(
+        &loser,
+        &pool_id,
+        &1u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
 
     env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
     s.client.settle_pool(&s.treasury, &pool_id, &0u32);
@@ -6104,8 +6204,22 @@ fn ma_w5_single_asset_claim_on_multi_asset_pool_rejected() {
     s.alt_admin_client.mint(&winner, &10_000i128);
     s.alt_admin_client.mint(&loser, &10_000i128);
 
-    s.client.place_multi_asset_bet(&winner, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None);
-    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &10_000i128, &s.alt_token.address, &None);
+    s.client.place_multi_asset_bet(
+        &winner,
+        &pool_id,
+        &0u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
+    s.client.place_multi_asset_bet(
+        &loser,
+        &pool_id,
+        &1u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
 
     env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
     s.client.settle_pool(&s.treasury, &pool_id, &0u32);
@@ -6129,8 +6243,22 @@ fn ma_f1_collect_multi_asset_fees_transfers_to_treasury() {
     s.alt_admin_client.mint(&winner, &10_000i128);
     s.alt_admin_client.mint(&loser, &10_000i128);
 
-    s.client.place_multi_asset_bet(&winner, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None);
-    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &10_000i128, &s.alt_token.address, &None);
+    s.client.place_multi_asset_bet(
+        &winner,
+        &pool_id,
+        &0u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
+    s.client.place_multi_asset_bet(
+        &loser,
+        &pool_id,
+        &1u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
 
     env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
     s.client.settle_pool(&s.treasury, &pool_id, &0u32);
@@ -6166,8 +6294,22 @@ fn ma_f3_collect_multi_asset_fees_unauthorized_rejected() {
     s.alt_admin_client.mint(&winner, &10_000i128);
     s.alt_admin_client.mint(&loser, &10_000i128);
 
-    s.client.place_multi_asset_bet(&winner, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None);
-    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &10_000i128, &s.alt_token.address, &None);
+    s.client.place_multi_asset_bet(
+        &winner,
+        &pool_id,
+        &0u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
+    s.client.place_multi_asset_bet(
+        &loser,
+        &pool_id,
+        &1u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
 
     env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
     s.client.settle_pool(&s.treasury, &pool_id, &0u32);
@@ -6187,7 +6329,11 @@ fn ma_l1_set_pool_token_bet_limits_stores_limits() {
     let pool_id = create_ma_pool(&s);
     // Should not panic.
     s.client.set_pool_token_bet_limits(
-        &s.treasury, &pool_id, &s.alt_token.address, &1_000i128, &50_000i128,
+        &s.treasury,
+        &pool_id,
+        &s.alt_token.address,
+        &1_000i128,
+        &50_000i128,
     );
 }
 
@@ -6207,7 +6353,11 @@ fn ma_l2_set_pool_token_bet_limits_single_asset_pool_rejected() {
         &MIN_CREATOR_DEPOSIT,
     );
     let result = s.client.try_set_pool_token_bet_limits(
-        &s.treasury, &sa_pool, &s.alt_token.address, &1_000i128, &50_000i128,
+        &s.treasury,
+        &sa_pool,
+        &s.alt_token.address,
+        &1_000i128,
+        &50_000i128,
     );
     assert!(result.is_err());
 }
@@ -6219,7 +6369,11 @@ fn ma_l3_set_pool_token_bet_limits_unauthorized_rejected() {
     let pool_id = create_ma_pool(&s);
     let rogue = Address::generate(&s.env);
     let result = s.client.try_set_pool_token_bet_limits(
-        &rogue, &pool_id, &s.alt_token.address, &1_000i128, &50_000i128,
+        &rogue,
+        &pool_id,
+        &s.alt_token.address,
+        &1_000i128,
+        &50_000i128,
     );
     assert!(result.is_err());
 }
@@ -6241,7 +6395,8 @@ fn ma_e1_place_multi_asset_bet_no_exchange_rate_fails() {
     let extra_token = token::Client::new(env, &extra_id.address());
 
     // Register extra token rate so pool creation succeeds.
-    s.client.set_token_exchange_rate(&s.treasury, &extra_id.address(), &10_000i128);
+    s.client
+        .set_token_exchange_rate(&s.treasury, &extra_id.address(), &10_000i128);
 
     let mut outcomes: soroban_sdk::Vec<soroban_sdk::String> = soroban_sdk::Vec::new(env);
     outcomes.push_back(String::from_str(env, "A"));
@@ -6264,9 +6419,8 @@ fn ma_e1_place_multi_asset_bet_no_exchange_rate_fails() {
     token::StellarAssetClient::new(env, &extra_id.address()).mint(&user, &5_000i128);
 
     // Bet should succeed since rate is set.
-    s.client.place_multi_asset_bet(
-        &user, &pool2, &0u32, &1_000i128, &extra_id.address(), &None,
-    );
+    s.client
+        .place_multi_asset_bet(&user, &pool2, &0u32, &1_000i128, &extra_id.address(), &None);
     let _ = pool_id; // used above for setup only
 }
 
@@ -6284,7 +6438,12 @@ fn ma_e2_place_multi_asset_bet_expired_pool_rejected() {
     s.alt_admin_client.mint(&user, &10_000i128);
 
     let result = s.client.try_place_multi_asset_bet(
-        &user, &pool_id, &0u32, &1_000i128, &s.alt_token.address, &None,
+        &user,
+        &pool_id,
+        &0u32,
+        &1_000i128,
+        &s.alt_token.address,
+        &None,
     );
     assert!(result.is_err());
 }
@@ -6303,9 +6462,30 @@ fn ma_e3_multi_asset_proportional_payout_two_winners() {
     s.alt_admin_client.mint(&w2, &5_000i128);
     s.alt_admin_client.mint(&loser, &15_000i128);
 
-    s.client.place_multi_asset_bet(&w1, &pool_id, &0u32, &10_000i128, &s.alt_token.address, &None);
-    s.client.place_multi_asset_bet(&w2, &pool_id, &0u32, &5_000i128, &s.alt_token.address, &None);
-    s.client.place_multi_asset_bet(&loser, &pool_id, &1u32, &15_000i128, &s.alt_token.address, &None);
+    s.client.place_multi_asset_bet(
+        &w1,
+        &pool_id,
+        &0u32,
+        &10_000i128,
+        &s.alt_token.address,
+        &None,
+    );
+    s.client.place_multi_asset_bet(
+        &w2,
+        &pool_id,
+        &0u32,
+        &5_000i128,
+        &s.alt_token.address,
+        &None,
+    );
+    s.client.place_multi_asset_bet(
+        &loser,
+        &pool_id,
+        &1u32,
+        &15_000i128,
+        &s.alt_token.address,
+        &None,
+    );
 
     env.ledger().with_mut(|li| li.timestamp = 1_000 + 3_601);
     s.client.settle_pool(&s.treasury, &pool_id, &0u32);

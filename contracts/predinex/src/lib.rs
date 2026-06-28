@@ -3160,7 +3160,9 @@ impl PredinexContract {
         let is_creator = pool.creator == caller;
         let is_expired = env.ledger().timestamp() > pool.expiry;
 
-        let auth_ok = is_admin || (is_creator && pool.status == PoolStatus::Open) || (is_expired && pool.status == PoolStatus::Open);
+        let auth_ok = is_admin
+            || (is_creator && pool.status == PoolStatus::Open)
+            || (is_expired && pool.status == PoolStatus::Open);
 
         if !auth_ok {
             return Err(ContractError::Unauthorized);
@@ -4870,7 +4872,10 @@ impl PredinexContract {
     /// Named `get_pool_info` to avoid collision with the existing
     /// `get_pool_metadata` (which returns the off-chain metadata URI).
     pub fn get_pool_info(env: Env, pool_id: u32) -> Option<PoolInfo> {
-        let pool = env.storage().persistent().get::<_, Pool>(&DataKey::Pool(pool_id))?;
+        let pool = env
+            .storage()
+            .persistent()
+            .get::<_, Pool>(&DataKey::Pool(pool_id))?;
         Some(PoolInfo {
             name: pool.title,
             description: pool.description,
@@ -4914,10 +4919,11 @@ impl PredinexContract {
                 .persistent()
                 .get::<_, UserBet>(&DataKey::UserBet(pool_id, user.clone()))
             {
-                let winnings_claimed = match Self::get_claim_status(env.clone(), pool_id, user.clone()) {
-                    ClaimStatus::AlreadyClaimed => true,
-                    _ => false,
-                };
+                let winnings_claimed =
+                    match Self::get_claim_status(env.clone(), pool_id, user.clone()) {
+                        ClaimStatus::AlreadyClaimed => true,
+                        _ => false,
+                    };
 
                 result.push_back(PoolLeaderboardEntry {
                     user,

@@ -28,7 +28,7 @@ impl BenchCtx {
 
         let contract_id = env.register(PredinexContract, ());
         let client: PredinexContractClient<'static> =
-            unsafe { core::mem::transmute(PredinexContractClient::new(&env, &contract_id)) };
+            PredinexContractClient::new(&env, &contract_id);
 
         let treasury = Address::generate(&env);
         let token_admin = Address::generate(&env);

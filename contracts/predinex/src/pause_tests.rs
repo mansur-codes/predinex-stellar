@@ -31,7 +31,7 @@ impl TestCtx {
 
         let contract_id = env.register(PredinexContract, ());
         let client: PredinexContractClient<'static> =
-            unsafe { core::mem::transmute(PredinexContractClient::new(&env, &contract_id)) };
+            PredinexContractClient::new(&env, &contract_id);
 
         let token_admin = Address::generate(&env);
         let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
