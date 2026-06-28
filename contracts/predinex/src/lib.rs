@@ -3968,6 +3968,9 @@ impl PredinexContract {
             return Err(ContractError::NoWinningBets);
         }
         let total_pool_balance = Self::sum_totals(&totals)?;
+        if total_pool_balance == 0 {
+            return Ok(0);
+        }
 
         let fee_bps = Self::pool_effective_fee_bps(env, pool_id);
         let fee = total_pool_balance
@@ -4388,7 +4391,10 @@ impl PredinexContract {
         {
             let mut pending_normalized: i128 = 0;
             for i in 0..allowed.len() {
-                let tok = allowed.get(i).ok_or(ContractError::PoolNotFound)?;
+                let tok = match allowed.get(i) {
+                    Some(t) => t,
+                    None => break,
+                };
                 let fee_t: i128 = env
                     .storage()
                     .persistent()
@@ -5771,10 +5777,16 @@ impl PredinexContract {
 
         let totals = Self::read_outcome_totals(&env, pool_id, &pool);
         let pool_winning_total = totals.get(winning_outcome).unwrap();
+        if pool_winning_total == 0 {
+            return ClaimPreview::Unclaimable;
+        }
         let total_pool_balance = match Self::sum_totals(&totals) {
             Ok(total) => total,
             Err(_) => return ClaimPreview::Unclaimable,
         };
+        if total_pool_balance == 0 {
+            return ClaimPreview::Claimable(0);
+        }
         let fee_bps = Self::pool_effective_fee_bps(&env, pool_id);
         let fee = match total_pool_balance.checked_mul(fee_bps) {
             Some(f) => f / 10000,

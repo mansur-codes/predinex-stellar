@@ -6507,3 +6507,184 @@ fn ma_e3_multi_asset_proportional_payout_two_winners() {
     // w1 gain should be roughly 2× w2 gain (allow ±1 for integer dust).
     assert!((gain_w1 - gain_w2 * 2).abs() <= 1);
 }
+
+// ============================================================================
+// Issue #559: claim_winnings edge cases — zero pool balance / division by zero
+// ============================================================================
+
+/// #559-1: When every bettor bet on the winning side (pool_winning_total ==
+/// total_pool_balance, losing side total == 0), claim_winnings returns the full
+/// net payout without panicking.
+#[test]
+fn issue559_all_bettors_on_winning_side_no_division_by_zero() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token = token::Client::new(&env, &token_id.address());
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
+
+    let contract_id = env.register(PredinexContract, ());
+    let client = PredinexContractClient::new(&env, &contract_id);
+    client.initialize(&token_id.address(), &token_admin, &token_admin);
+
+    let creator = Address::generate(&env);
+    let user = Address::generate(&env);
+    token_admin_client.mint(&user, &20_000_000);
+
+    let pool_id = client.create_pool(
+        &creator,
+        &String::from_str(&env, "All-on-one"),
+        &String::from_str(&env, "Desc"),
+        &String::from_str(&env, "Yes"),
+        &String::from_str(&env, "No"),
+        &3_600,
+        &MIN_CREATOR_DEPOSIT,
+    );
+
+    // Only outcome 0 is bet on — no bets on outcome 1.
+    let bet = 5_000_000i128;
+    client.place_bet(&user, &pool_id, &0, &bet, &None::<Address>);
+
+    env.ledger().with_mut(|li| li.timestamp = 3_601);
+    client.settle_pool(&token_admin, &pool_id, &0);
+
+    // pool_winning_total == total_pool_balance, losing total == 0.
+    // Winnings = net_pool = bet - fee.
+    let winnings = client.claim_winnings(&user, &pool_id);
+    assert!(winnings > 0, "winnings must be positive");
+    let fee = (bet * 200) / 10_000; // 2% default
+    assert_eq!(winnings, bet - fee);
+    assert_eq!(token.balance(&user), 20_000_000 - bet + winnings);
+}
+
+/// #559-2: Settling with a winning outcome that received zero bets
+/// (pool_winning_total == 0) must return NoWinningBets, not panic.
+#[test]
+fn issue559_winning_outcome_with_no_bets_returns_no_winning_bets() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
+
+    let contract_id = env.register(PredinexContract, ());
+    let client = PredinexContractClient::new(&env, &contract_id);
+    client.initialize(&token_id.address(), &token_admin, &token_admin);
+
+    let creator = Address::generate(&env);
+    let user = Address::generate(&env);
+    token_admin_client.mint(&user, &10_000_000);
+
+    let pool_id = client.create_pool(
+        &creator,
+        &String::from_str(&env, "Unbet winner"),
+        &String::from_str(&env, "Desc"),
+        &String::from_str(&env, "Yes"),
+        &String::from_str(&env, "No"),
+        &3_600,
+        &MIN_CREATOR_DEPOSIT,
+    );
+
+    // Bets only on outcome 1 (the losing side).
+    client.place_bet(&user, &pool_id, &1, &5_000_000, &None::<Address>);
+
+    env.ledger().with_mut(|li| li.timestamp = 3_601);
+    // Settle with outcome 0 — no one bet on it.
+    client.settle_pool(&token_admin, &pool_id, &0);
+
+    // Any attempt to claim should return NoWinningsToClaim since the user
+    // has no stake on the winning outcome.
+    let result = client.try_claim_winnings(&user, &pool_id);
+    assert_eq!(result, Err(Ok(ContractError::NoWinningsToClaim)));
+}
+
+/// #559-3: A user who bet only on the losing side cannot claim winnings;
+/// claim_winnings returns NoWinningsToClaim.
+#[test]
+fn issue559_loser_only_bet_cannot_claim() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
+
+    let contract_id = env.register(PredinexContract, ());
+    let client = PredinexContractClient::new(&env, &contract_id);
+    client.initialize(&token_id.address(), &token_admin, &token_admin);
+
+    let creator = Address::generate(&env);
+    let winner = Address::generate(&env);
+    let loser = Address::generate(&env);
+    token_admin_client.mint(&winner, &5_000_000);
+    token_admin_client.mint(&loser, &5_000_000);
+
+    let pool_id = client.create_pool(
+        &creator,
+        &String::from_str(&env, "Loser only"),
+        &String::from_str(&env, "Desc"),
+        &String::from_str(&env, "Yes"),
+        &String::from_str(&env, "No"),
+        &3_600,
+        &MIN_CREATOR_DEPOSIT,
+    );
+
+    client.place_bet(&winner, &pool_id, &0, &5_000_000, &None::<Address>);
+    client.place_bet(&loser, &pool_id, &1, &5_000_000, &None::<Address>);
+
+    env.ledger().with_mut(|li| li.timestamp = 3_601);
+    client.settle_pool(&token_admin, &pool_id, &0);
+
+    // loser bet only on outcome 1 — must be rejected with NoWinningsToClaim.
+    let result = client.try_claim_winnings(&loser, &pool_id);
+    assert_eq!(result, Err(Ok(ContractError::NoWinningsToClaim)));
+}
+
+/// #559-4: preview_claimable_amount returns Unclaimable when the declared
+/// winning outcome has no bets (pool_winning_total == 0).
+#[test]
+fn issue559_preview_unclaimable_when_no_bets_on_winning_side() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_id.address());
+
+    let contract_id = env.register(PredinexContract, ());
+    let client = PredinexContractClient::new(&env, &contract_id);
+    client.initialize(&token_id.address(), &token_admin, &token_admin);
+
+    let creator = Address::generate(&env);
+    let user = Address::generate(&env);
+    token_admin_client.mint(&user, &5_000_000);
+
+    let pool_id = client.create_pool(
+        &creator,
+        &String::from_str(&env, "Preview test"),
+        &String::from_str(&env, "Desc"),
+        &String::from_str(&env, "Yes"),
+        &String::from_str(&env, "No"),
+        &3_600,
+        &MIN_CREATOR_DEPOSIT,
+    );
+
+    // User bets only on outcome 1; outcome 0 will be declared winner.
+    client.place_bet(&user, &pool_id, &1, &5_000_000, &None::<Address>);
+
+    env.ledger().with_mut(|li| li.timestamp = 3_601);
+    // Settle with outcome 0 — nobody bet on it.
+    client.settle_pool(&token_admin, &pool_id, &0);
+
+    // User has no winning bet — preview should indicate not eligible.
+    let preview = client.preview_claimable_amount(&pool_id, &user);
+    assert_eq!(preview, ClaimPreview::NotEligible);
+
+    // Previewing as a random address that never bet should show NeverBet.
+    let stranger = Address::generate(&env);
+    let preview_stranger = client.preview_claimable_amount(&pool_id, &stranger);
+    assert_eq!(preview_stranger, ClaimPreview::NeverBet);
+}
