@@ -1,4 +1,4 @@
-// apps/web/src/components/EmbedCodeSnippet.tsx
+// web/components/EmbedCodeSnippet.tsx
 // Renders a copyable iframe embed code for any public pool.
 // Drop this on the pool detail page alongside the existing pool UI.
 'use client';
