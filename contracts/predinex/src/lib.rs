@@ -16,6 +16,7 @@ mod benchmarks;
 mod bet_management_tests;
 mod create_pool_validation_tests;
 mod e2e_tests;
+mod fee_config_tests;
 mod fuzz;
 mod fuzz_tests;
 mod multi_asset_tests;

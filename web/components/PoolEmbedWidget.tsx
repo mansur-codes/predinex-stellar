@@ -1,4 +1,4 @@
-// apps/web/src/components/PoolEmbedWidget.tsx
+// web/components/PoolEmbedWidget.tsx
 // Renders pool details for the embed widget.
 // Supports read-only mode for disconnected visitors and
 // full interaction for Freighter-connected users.
