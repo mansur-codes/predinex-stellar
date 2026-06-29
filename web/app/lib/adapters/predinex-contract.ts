@@ -235,4 +235,67 @@ export const predinexContract = {
 
     return { txHash: result.txHash };
   },
+
+  async freezePoolSoroban(params: {
+    wallet: FreighterWalletClient;
+    poolId: number;
+    onStageChange?: (stage: TxStage) => void;
+    onFeeEstimated?: (feeStroops: string) => Promise<boolean>;
+  }): Promise<{ txHash: string }> {
+    const { soroban } = getRuntimeConfig();
+    const service = getSorobanService();
+
+    const result = await service.freezePool(
+      params.wallet,
+      soroban.contractId,
+      { poolId: params.poolId },
+      params.onStageChange,
+      params.onFeeEstimated
+    );
+
+    if (result.status === 'FAILED') throw new Error(result.error || 'Transaction failed');
+    return { txHash: result.txHash };
+  },
+
+  async disputePoolSoroban(params: {
+    wallet: FreighterWalletClient;
+    poolId: number;
+    onStageChange?: (stage: TxStage) => void;
+    onFeeEstimated?: (feeStroops: string) => Promise<boolean>;
+  }): Promise<{ txHash: string }> {
+    const { soroban } = getRuntimeConfig();
+    const service = getSorobanService();
+
+    const result = await service.disputePool(
+      params.wallet,
+      soroban.contractId,
+      { poolId: params.poolId },
+      params.onStageChange,
+      params.onFeeEstimated
+    );
+
+    if (result.status === 'FAILED') throw new Error(result.error || 'Transaction failed');
+    return { txHash: result.txHash };
+  },
+
+  async unfreezePoolSoroban(params: {
+    wallet: FreighterWalletClient;
+    poolId: number;
+    onStageChange?: (stage: TxStage) => void;
+    onFeeEstimated?: (feeStroops: string) => Promise<boolean>;
+  }): Promise<{ txHash: string }> {
+    const { soroban } = getRuntimeConfig();
+    const service = getSorobanService();
+
+    const result = await service.unfreezePool(
+      params.wallet,
+      soroban.contractId,
+      { poolId: params.poolId },
+      params.onStageChange,
+      params.onFeeEstimated
+    );
+
+    if (result.status === 'FAILED') throw new Error(result.error || 'Transaction failed');
+    return { txHash: result.txHash };
+  },
 };

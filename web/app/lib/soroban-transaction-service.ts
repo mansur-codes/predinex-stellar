@@ -421,6 +421,123 @@ export class SorobanTransactionService {
     return this.executeWithFeePrompt(tx, wallet, onStageChange, onFeeEstimated);
   }
 
+  /**
+   * Freezes a pool, preventing further bets or claims (admin operation).
+   *
+   * @param wallet - Connected Freighter wallet client
+   * @param contractId - Soroban contract ID to invoke
+   * @param params.poolId - ID of the pool being frozen
+   * @param onStageChange - Optional callback for transaction stage updates
+   * @param onFeeEstimated - Optional callback to approve/reject the estimated fee
+   * @returns The submitted transaction result
+   */
+  async freezePool(
+    wallet: FreighterWalletClient,
+    contractId: string,
+    params: { poolId: number },
+    onStageChange?: (stage: TxStage) => void,
+    onFeeEstimated?: (feeStroops: string) => Promise<boolean>,
+  ): Promise<SorobanTxResult> {
+    if (!wallet.address) throw new Error("Wallet not connected");
+
+    const contract = new Contract(contractId);
+    const sourceAccount = await this.server.getAccount(wallet.address);
+
+    const tx = new TransactionBuilder(sourceAccount, {
+      fee: "1000",
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(
+        contract.call(
+          "freeze_pool",
+          new Address(wallet.address).toScVal(),
+          nativeToScVal(params.poolId, { type: "u32" }),
+        ),
+      )
+      .setTimeout(30)
+      .build();
+
+    return this.executeWithFeePrompt(tx, wallet, onStageChange, onFeeEstimated);
+  }
+
+  /**
+   * Disputes a settled pool, preventing claims pending resolution (admin operation).
+   *
+   * @param wallet - Connected Freighter wallet client
+   * @param contractId - Soroban contract ID to invoke
+   * @param params.poolId - ID of the pool being disputed
+   * @param onStageChange - Optional callback for transaction stage updates
+   * @param onFeeEstimated - Optional callback to approve/reject the estimated fee
+   * @returns The submitted transaction result
+   */
+  async disputePool(
+    wallet: FreighterWalletClient,
+    contractId: string,
+    params: { poolId: number },
+    onStageChange?: (stage: TxStage) => void,
+    onFeeEstimated?: (feeStroops: string) => Promise<boolean>,
+  ): Promise<SorobanTxResult> {
+    if (!wallet.address) throw new Error("Wallet not connected");
+
+    const contract = new Contract(contractId);
+    const sourceAccount = await this.server.getAccount(wallet.address);
+
+    const tx = new TransactionBuilder(sourceAccount, {
+      fee: "1000",
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(
+        contract.call(
+          "dispute_pool",
+          new Address(wallet.address).toScVal(),
+          nativeToScVal(params.poolId, { type: "u32" }),
+        ),
+      )
+      .setTimeout(30)
+      .build();
+
+    return this.executeWithFeePrompt(tx, wallet, onStageChange, onFeeEstimated);
+  }
+
+  /**
+   * Unfreezes a frozen or disputed pool (admin operation).
+   *
+   * @param wallet - Connected Freighter wallet client
+   * @param contractId - Soroban contract ID to invoke
+   * @param params.poolId - ID of the pool being unfrozen
+   * @param onStageChange - Optional callback for transaction stage updates
+   * @param onFeeEstimated - Optional callback to approve/reject the estimated fee
+   * @returns The submitted transaction result
+   */
+  async unfreezePool(
+    wallet: FreighterWalletClient,
+    contractId: string,
+    params: { poolId: number },
+    onStageChange?: (stage: TxStage) => void,
+    onFeeEstimated?: (feeStroops: string) => Promise<boolean>,
+  ): Promise<SorobanTxResult> {
+    if (!wallet.address) throw new Error("Wallet not connected");
+
+    const contract = new Contract(contractId);
+    const sourceAccount = await this.server.getAccount(wallet.address);
+
+    const tx = new TransactionBuilder(sourceAccount, {
+      fee: "1000",
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(
+        contract.call(
+          "unfreeze_pool",
+          new Address(wallet.address).toScVal(),
+          nativeToScVal(params.poolId, { type: "u32" }),
+        ),
+      )
+      .setTimeout(30)
+      .build();
+
+    return this.executeWithFeePrompt(tx, wallet, onStageChange, onFeeEstimated);
+  }
+
   private async pollForSuccess(txHash: string): Promise<SorobanTxResult> {
     let attempts = 0;
     while (attempts < 20) {

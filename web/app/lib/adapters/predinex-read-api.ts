@@ -11,6 +11,7 @@ import {
   getUserBetFromSoroban,
   getPoolCountFromSoroban,
   getPoolBetLimitsFromSoroban,
+  getFreezeAdminFromSoroban,
   type Pool,
   type UserBetData,
 } from "../soroban-read-api";
@@ -118,6 +119,13 @@ async function getPoolCount(): Promise<number> {
 }
 
 /**
+ * Get freeze admin address from Soroban.
+ */
+async function getFreezeAdmin(): Promise<string | null> {
+  return getFreezeAdminFromSoroban();
+}
+
+/**
  * Public read API for the SDK client. Prefers Soroban read paths; retains
  * legacy Stacks delegates for callers still migrating.
  */
@@ -128,6 +136,8 @@ export const predinexReadApi = {
   getUserBet,
   /** Canonical Soroban read: get total pool count */
   getPoolCount,
+  /** Canonical Soroban read: get freeze admin */
+  getFreezeAdmin,
   /** Canonical Soroban read: get user activity via events */
   getUserActivitySoroban,
   /** Canonical Soroban read: get user activity via events */

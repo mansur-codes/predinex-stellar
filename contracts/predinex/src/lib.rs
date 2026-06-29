@@ -4693,6 +4693,11 @@ impl PredinexContract {
         env.storage().persistent().get(&DataKey::Admin)
     }
 
+    /// Return the current freeze admin address, if one has been set.
+    pub fn get_freeze_admin(env: Env) -> Option<Address> {
+        env.storage().persistent().get(&DataKey::FreezeAdmin)
+    }
+
     /// Freeze a pool, blocking new bets and claim payouts.
     /// Callable only by the freeze admin.
     pub fn freeze_pool(env: Env, caller: Address, pool_id: u32) -> Result<(), ContractError> {
